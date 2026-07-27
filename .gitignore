@@ -1,0 +1,62 @@
+# === IDE / editor ===
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+/.pytest_cache/
+/.mypy_cache/
+/.ruff_cache/
+/.coverage
+/htmlcov/
+
+# === Virtual environments ===
+/.venv/
+/venv/
+/env/
+
+# === Node.js ===
+/node_modules/
+/packaging/node_modules/
+
+# === Build and release artifacts ===
+/build/
+/dist/
+/release/
+/packaging/build/
+/packaging/dist/
+/packaging/release/
+
+# === Local runtime data ===
+/config/
+/data/
+/logs/
+/backups/
+/GameTierMaker_Data/
+*.log
+*.bak
+*.tmp-*
+.env
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === TEST ===
+/tests/
+/test/
+
+# === SKILLS ===
+AGENTS.md
+
+# === DEMO ===
+/ui_demo/
+# === PACKAGING ===
+/packaging/

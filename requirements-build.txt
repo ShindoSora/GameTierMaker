@@ -1,0 +1,4 @@
+-r requirements.txt
+
+packaging>=24.0
+pyinstaller>=6.0
