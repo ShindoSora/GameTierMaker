@@ -88,8 +88,8 @@ os.environ["GAMELIST_ROOT"] = ROOT_DIR
 
 # ── 命令行参数 ────────────────────────────────────────
 parser = argparse.ArgumentParser(description="Game Tier Maker")
-parser.add_argument("--debug", action="store_true", help="调试模式: DEBUG 日志 + 浏览器打开")
-parser.add_argument("--no-browser", action="store_true", help="不打开任何窗口，仅启动后端")
+parser.add_argument("--debug", action="store_true", help="调试模式")
+parser.add_argument("--port",type=int,default=8000,help="8000",)
 parser.add_argument(
     "--xbox-authenticate",
     metavar="TOKEN_PATH",
@@ -98,7 +98,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 IS_DEBUG = args.debug
-RUNTIME_MODE = "desktop" if IS_FROZEN and not IS_DEBUG and not args.no_browser else "browser"
+RUNTIME_MODE = "desktop" if IS_FROZEN  else "browser"
 os.environ["GAMELIST_RUNTIME_MODE"] = RUNTIME_MODE
 
 # ── 日志 ──────────────────────────────────────────────
@@ -295,10 +295,6 @@ def _stop_server():
         _uvicorn_server.should_exit = True
 
 
-def _open_browser(url="http://127.0.0.1:8000"):
-    """系统默认浏览器打开"""
-    import webbrowser
-    webbrowser.open(url)
 
 
 class DesktopApi:
@@ -362,8 +358,11 @@ if __name__ == "__main__":
         raise SystemExit(0)
 
     HOST = "127.0.0.1"
-    PORT = _find_free_port(HOST)
+    PORT = _find_free_port(HOST) if IS_FROZEN else args.port
     APP_URL = f"http://{HOST}:{PORT}"
+    # HOST = "127.0.0.1"
+    # PORT = _find_free_port(HOST)
+    # APP_URL = f"http://{HOST}:{PORT}"
 
     # 启动后端线程
     server_thread = threading.Thread(target=_run_server, args=(HOST, PORT), daemon=True)
@@ -376,20 +375,15 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     try:
-        if args.no_browser:
-            # 仅后端，不启动窗口
-            logger.info("后端已启动: %s (无窗口模式)", APP_URL)
-            server_thread.join()
 
-        elif IS_FROZEN and not IS_DEBUG:
+        if IS_FROZEN :
             # 打包模式 → 嵌入式 webview 窗口
             logger.info("启动桌面应用窗口: %s", APP_URL)
             _run_webview(APP_URL)
 
         else:
-            # 开发 / 调试模式 → 系统浏览器
-            _open_browser(APP_URL)
-            logger.info("浏览器已打开: %s", APP_URL)
+            # 开发 / 调试模式 → 系统浏览
+            logger.info("%s", APP_URL)
             server_thread.join()
     except KeyboardInterrupt:
         logger.info("收到退出信号")
