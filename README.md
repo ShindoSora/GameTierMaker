@@ -2,6 +2,8 @@
 
 Python 3.13
 
+[简体中文](README.md)|[ENGLISH](README(en).md)
+
 Game Tier Maker 是一个在本地运行的游戏 Tier List 制作工具
 
 您可以使用搜索功能搜索游戏封面等其他内容，或配置 Steam、PlayStation Network 和 Xbox 等平台的授权信息后，读取对应账号的游戏库。
