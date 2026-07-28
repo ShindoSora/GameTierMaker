@@ -84,4 +84,4 @@ Game Tier Maker 使用了第三方开源组件。各组件仍分别适用其原�
 - 版权所有：Copyright (c) 2020 OpenXbox
 - 许可证：MIT License
 - 项目地址：https://github.com/OpenXbox/xbox-webapi-python
-- 完整许可证：[licenses/xbox-webapi-LICENSE.txt](licenses/xbox-webapi-LICENSE.txt)
+- 完整许可证：[xbox-webapi-LICENSE.txt](xbox-webapi-LICENSE.txt)
