@@ -24,15 +24,19 @@ class SearchBANGUI:
         data = {
             "keyword": game_name,
             "filter": {
-                "type": [4]
+                "type": [1,2,3,4,6]
             }
         }
         headers = {
             "User-Agent": bangumi_user_agent
         }
+        params = {
+            "limit": 200,
+            "offset": 0,
+        }
 
         try:
-            res = requests.post(url, json=data, headers=headers, timeout=10)
+            res = requests.post(url, params=params,json=data, headers=headers, timeout=10)
         except requests.exceptions.Timeout as exc:
             raise RemoteTimeoutError(
                 "Bangumi 搜索超时，请检查网络连接",

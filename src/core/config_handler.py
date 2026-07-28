@@ -66,9 +66,9 @@ class ConfigHandler:
                 return self.save_token_to_json(new_token,timestamp)
             else:
                 logger.warning("IGDB token 请求失败，状态码: %s", response.status_code)
-                return None
+                return False, self.client_id, None
         except Exception:
-            return None
+            return False, self.client_id, None
 
     def save_token_to_json(self,new_token,timestamp):
         expiration_time = int(time.time()) + timestamp
