@@ -2,6 +2,8 @@
 
 Python 3.13
 
+[简体中文](README.md)|[ENGLISH](README(en).md)
+
 Game Tier Maker is a locally run tool for creating game Tier Lists.
 
 You can use the search feature to find game covers and other content, or configure authorization credentials for platforms such as Steam, PlayStation Network, and Xbox to retrieve the game libraries associated with those accounts.
