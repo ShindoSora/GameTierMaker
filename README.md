@@ -1,8 +1,13 @@
 # Game Tier Maker
 
+Python 3.13
+
 Game Tier Maker 是一个在本地运行的游戏 Tier List 制作工具
-您可以使用搜索功能搜索游戏封面，或绑定您的steam,psn,xbox账号获取游戏库(需要在设置里配置对应的key等才能使用)
+
+您可以使用搜索功能搜索游戏封面等其他内容，或配置 Steam、PlayStation Network 和 Xbox 等平台的授权信息后，读取对应账号的游戏库。
+
 您可以将本地的图片导入到程序中
+
 程序可以新建多个排序模板，右键等级行可以更改颜色，双击可以改名
 <img width="1573" height="1013" alt="image" src="https://github.com/user-attachments/assets/58bbc950-6918-4c82-9c9e-028d371b753e" />
 <img width="1571" height="992" alt="image" src="https://github.com/user-attachments/assets/a247ae21-bab6-4458-bd23-2310d4f4ae77" />
@@ -34,7 +39,7 @@ python -m venv .venv
 
 访问 http://localhost:8000 查看应用
 
-## 打包 Windows exe
+## Windows exe
 
 先安装构建依赖：
 
@@ -50,16 +55,18 @@ python -m venv .venv
 exe存放目录:
 
 ```powershell
-\dist\GameTierMaker.exe
+.\dist\GameTierMaker.exe
 ```
 双击启动
-exe不会继续使用源目录中的配置，而是使用exe同级的 `GameTierMaker_Data/`。移动exe时，需将exe放置到文件夹中以便程序读取配置文件
+
+exe不会继续使用源目录中的配置，而是使用启动exe后在同一文件夹中生成的 `GameTierMaker_Data/`。
 
 ## 配置、隐私与安全
 
-此项目在本地运行，图片数据均在本地处理
+本项目的主要功能在本地运行。本地导入的图片、Tier List 数据和应用配置默认保存在本地。
+使用游戏搜索、封面下载或平台账号绑定功能时，程序会向对应的第三方服务发送网络请求。
 
-部分第三方服务需要 API Key、Client Secret、登录令牌或其他授权信息,这些内容保存在本地配置目录中。
+第三方服务需要 API Key、Client Secret、登录令牌或其他授权信息,这些内容保存在本地配置目录中。
 
 ## 第三方服务说明
 
@@ -68,6 +75,15 @@ exe不会继续使用源目录中的配置，而是使用exe同级的 `GameTierM
 本项目与 Valve、Sony、Microsoft、Twitch、IGDB、Bangumi 及其关联公司不存在官方隶属、授权或背书关系。第三方接口、认证流程和返回结构可能随时发生变化，因此相关集成不保证永久可用。
 
 游戏名称、封面、商标和其他第三方内容的权利归各自权利人所有。使用者应自行确认其下载、缓存、导出和再分发行为符合适用规则。
+
+## 致谢
+
+- 本项目的产品形式和部分交互设计受到 [TierMaker](https://tiermaker.com/) 的启发。
+- PlayStation Network 相关功能的开发参考了：
+  - [PlayStation-Trophies](https://github.com/andshrew/PlayStation-Trophies/)
+  - [PSN-API](https://github.com/achievements-app/psn-api)
+- Xbox 相关功能使用了此项目[xbox-webapi-python](https://github.com/OpenXbox/xbox-webapi-python)。
+- 感谢 [Steam](https://store.steampowered.com/)、[Bangumi](https://bangumi.tv/) 和 [IGDB](https://www.igdb.com/) 提供相关平台服务或数据接口。
 
 ## 许可证
 
@@ -83,5 +99,5 @@ Game Tier Maker 使用了第三方开源组件。各组件仍分别适用其原�
 - 项目：`xbox-webapi-python`
 - 版权所有：Copyright (c) 2020 OpenXbox
 - 许可证：MIT License
-- 项目地址：https://github.com/OpenXbox/xbox-webapi-python
+- 项目地址：[xbox-webapi-python](https://github.com/OpenXbox/xbox-webapi-python)
 - 完整许可证：[xbox-webapi-LICENSE.txt](xbox-webapi-LICENSE.txt)
