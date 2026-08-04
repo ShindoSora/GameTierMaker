@@ -35,18 +35,30 @@ async def list_groups():
             if mgr.current_template else False
         })
 
-    search_image_ids = set()
+    top_crop_image_ids = set()
     shared_search_group = mgr._lib().find_group_by_id("default_upload")
     if shared_search_group:
-        search_image_ids.update(shared_search_group.image_ids)
+        top_crop_image_ids.update(shared_search_group.image_ids)
+    shared_local_group = mgr._lib().find_group_by_id("local_upload")
+    if shared_local_group:
+        top_crop_image_ids.update(shared_local_group.image_ids)
     for template in mgr.project_data.templates:
         search_group = template.hidden_preset.find_group_by_id("default_upload")
         if search_group:
-            search_image_ids.update(search_group.image_ids)
+            top_crop_image_ids.update(search_group.image_ids)
+        local_group = template.hidden_preset.find_group_by_id("local_upload")
+        if local_group:
+            top_crop_image_ids.update(local_group.image_ids)
 
     images_meta = {}
     for img_id, meta in mgr.project_data.shared_images_meta.items():
-        use_top_crop = bool(meta.steam_id) or img_id in search_image_ids
+        # 搜索和上传图片导入后都是本地图片；图片移入等级行或未排序列表
+        # 后会从隐藏图片库分组移除，因此不能只依赖分组 ID 判断显示模式。
+        use_top_crop = (
+            bool(meta.steam_id)
+            or not meta.is_remote
+            or img_id in top_crop_image_ids
+        )
         images_meta[img_id] = {
             "is_remote": meta.is_remote,
             "remote_failed": meta.remote_failed,

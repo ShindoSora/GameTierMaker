@@ -912,8 +912,6 @@ class ProjectManager:
             target_group.image_ids.append(image_id)
             # 同步存入当前模板的隐藏预设
             self._add_to_hidden_preset(image_id, LOCAL_UPLOAD_GROUP_ID)
-            if image_id not in self.current_template.unassigned_images:
-                self.current_template.unassigned_images.append(image_id)
 
             self.save_project()
             return img_obj
@@ -965,8 +963,6 @@ class ProjectManager:
                     self._lib().groups.append(target_group)
             target_group.image_ids.append(image_id)
             self._add_to_hidden_preset(image_id, LOCAL_UPLOAD_GROUP_ID)
-            if image_id not in self.current_template.unassigned_images:
-                self.current_template.unassigned_images.append(image_id)
         except Exception:
             pass
 
