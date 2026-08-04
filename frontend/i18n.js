@@ -28,6 +28,7 @@
     'actions.save': '保存',
     'actions.saveAll': '保存配置',
     'actions.refresh': '刷新',
+    'actions.refreshAll': '刷新全部内容',
     'actions.bind': '绑定',
     'actions.sync': '同步',
     'actions.deleteImages': '删除图片',
@@ -210,6 +211,7 @@
 
     'steam.bindHelp': '点击下方按钮跳转至 Steam 进行账号绑定授权。',
     'steam.bindAccount': '绑定 Steam 账号',
+    'steam.bindTimeout': '等待 Steam 绑定结果超时，请重试或点击全局刷新',
     'steam.noAccounts': '暂无绑定账号，请在「设置」中绑定',
     'steam.coversLoaded': 'Steam 封面已加载，后台下载中...',
     'steam.syncing': '正在同步 Steam 游戏库',
@@ -409,6 +411,7 @@
     'actions.save': 'Save',
     'actions.saveAll': 'Save Configuration',
     'actions.refresh': 'Refresh',
+    'actions.refreshAll': 'Refresh all content',
     'actions.bind': 'Link',
     'actions.sync': 'Sync',
     'actions.deleteImages': 'Delete images',
@@ -591,6 +594,7 @@
 
     'steam.bindHelp': 'Click the button below to sign in to Steam and authorize account linking.',
     'steam.bindAccount': 'Link Steam account',
+    'steam.bindTimeout': 'Timed out waiting for Steam linking. Try again or refresh the app.',
     'steam.noAccounts': 'No accounts are linked. Use the button above to link one.',
     'steam.coversLoaded': 'Steam covers loaded; downloading in the background...',
     'steam.syncing': 'Syncing Steam library',

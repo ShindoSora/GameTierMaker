@@ -1,8 +1,12 @@
 """
 设置与账号绑定 API
 """
+import json
 import os
 import shutil
+import threading
+import time
+import uuid
 from html import escape
 from urllib.parse import urlencode
 import logging
@@ -37,6 +41,45 @@ from src.core.export_service import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 image_cache = "./data/cache"
+
+_STEAM_IMPORT_JOBS: dict[str, dict[str, object]] = {}
+_STEAM_IMPORT_JOBS_LOCK = threading.RLock()
+_STEAM_IMPORT_JOB_TTL_SECONDS = 30 * 60
+
+
+def _set_steam_import_job(operation_id: str, **changes) -> None:
+    """Store Steam callback progress so the embedded EXE can poll it."""
+    if not operation_id:
+        return
+    now = time.time()
+    with _STEAM_IMPORT_JOBS_LOCK:
+        expired = [
+            job_id
+            for job_id, job in _STEAM_IMPORT_JOBS.items()
+            if now - float(job.get("updated_at", now)) > _STEAM_IMPORT_JOB_TTL_SECONDS
+        ]
+        for job_id in expired:
+            _STEAM_IMPORT_JOBS.pop(job_id, None)
+
+        job = _STEAM_IMPORT_JOBS.setdefault(
+            operation_id,
+            {
+                "operation_id": operation_id,
+                "status": "pending",
+                "steamid": "",
+                "total": 0,
+                "message": "",
+                "error": "",
+            },
+        )
+        job.update(changes)
+        job["updated_at"] = now
+
+
+def _get_steam_import_job(operation_id: str) -> dict[str, object] | None:
+    with _STEAM_IMPORT_JOBS_LOCK:
+        job = _STEAM_IMPORT_JOBS.get(operation_id)
+        return dict(job) if job else None
 
 
 _STEAM_CALLBACK_TEXTS = {
@@ -114,11 +157,20 @@ def _steam_callback_error(
     message_key: str,
     status_code: int = 400,
     language: str | None = None,
+    operation_id: str = "",
+    error_code: str = "",
 ) -> HTMLResponse:
     """Return a safe error page for the browser-based Steam callback."""
     language = language or _steam_callback_language()
+    raw_message = _steam_callback_text(message_key, language)
+    _set_steam_import_job(
+        operation_id,
+        status="error",
+        message=raw_message,
+        error=error_code or message_key,
+    )
     title = escape(_steam_callback_text("error_title", language))
-    message = escape(_steam_callback_text(message_key, language))
+    message = escape(raw_message)
     html = (
         "<!DOCTYPE html>\n"
         f'<html lang="{language}">\n'
@@ -131,7 +183,11 @@ def _steam_callback_error(
     return HTMLResponse(html, status_code=status_code)
 
 
-def _steam_callback_app_error(exc: AppError, language: str) -> HTMLResponse:
+def _steam_callback_app_error(
+    exc: AppError,
+    language: str,
+    operation_id: str = "",
+) -> HTMLResponse:
     if isinstance(exc, RemoteTimeoutError):
         status_code = 504
     elif isinstance(exc, RemoteServiceError):
@@ -139,7 +195,13 @@ def _steam_callback_app_error(exc: AppError, language: str) -> HTMLResponse:
     else:
         status_code = 400
     message_key = _STEAM_CALLBACK_ERROR_KEYS.get(exc.code, "generic_error")
-    return _steam_callback_error(message_key, status_code, language)
+    return _steam_callback_error(
+        message_key,
+        status_code,
+        language,
+        operation_id=operation_id,
+        error_code=exc.code,
+    )
 
 
 class IgdbSettingsRequest(BaseModel):
@@ -241,7 +303,13 @@ async def update_steam_settings(req: SteamSettingsRequest):
 @router.post("/steam/jump")
 async def steam_jump(request: Request):
     base_url = str(request.base_url).rstrip("/")
-    return_to = base_url + "/api/settings/steam/callback"
+    operation_id = uuid.uuid4().hex
+    _set_steam_import_job(operation_id, status="pending")
+    return_to = (
+        base_url
+        + "/api/settings/steam/callback?"
+        + urlencode({"operation_id": operation_id})
+    )
     params = {
         "openid.ns": "http://specs.openid.net/auth/2.0",
         "openid.mode": "checkid_setup",
@@ -251,7 +319,15 @@ async def steam_jump(request: Request):
         "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
     }
     login_url = "https://steamcommunity.com/openid/login?" + urlencode(params)
-    return {"url": login_url}
+    return {"url": login_url, "operation_id": operation_id}
+
+
+@router.get("/steam/import-status/{operation_id}")
+async def steam_import_status(operation_id: str):
+    job = _get_steam_import_job(operation_id)
+    if not job:
+        return {"operation_id": operation_id, "status": "unknown"}
+    return job
 
 
 @router.get("/steam/callback")
@@ -259,11 +335,17 @@ def steam_callback(request: Request):
     """Steam OpenID 回调：验证 -> 获取游戏库 -> 去重 -> 远程注册 -> 通知前端"""
     language = _steam_callback_language()
     params = dict(request.query_params)
+    operation_id = str(params.get("operation_id", "")).strip()
+    _set_steam_import_job(operation_id, status="processing")
 
     if params.get("openid.mode") != "id_res":
-        return _steam_callback_error("login_failed", 400, language)
+        return _steam_callback_error(
+            "login_failed", 400, language, operation_id=operation_id
+        )
 
-    verify_params = params.copy()
+    verify_params = {
+        key: value for key, value in params.items() if key.startswith("openid.")
+    }
     verify_params["openid.mode"] = "check_authentication"
 
     try:
@@ -272,40 +354,54 @@ def steam_callback(request: Request):
             data=verify_params, timeout=10
         )
         if "is_valid:true" not in resp.text:
-            return _steam_callback_error("identity_failed", 400, language)
+            return _steam_callback_error(
+                "identity_failed", 400, language, operation_id=operation_id
+            )
     except requests.exceptions.Timeout:
-        return _steam_callback_error("identity_timeout", 504, language)
+        return _steam_callback_error(
+            "identity_timeout", 504, language, operation_id=operation_id
+        )
     except requests.exceptions.RequestException:
         logger.exception("Steam OpenID 验证请求失败")
-        return _steam_callback_error("identity_service_error", 502, language)
+        return _steam_callback_error(
+            "identity_service_error", 502, language, operation_id=operation_id
+        )
 
     claimed_id = params.get("openid.claimed_id", "")
     match = re.search(r"https://steamcommunity.com/openid/id/(\d+)", claimed_id)
     if not match:
-        return _steam_callback_error("steam_id_missing", 400, language)
+        return _steam_callback_error(
+            "steam_id_missing", 400, language, operation_id=operation_id
+        )
 
     steamid = match.group(1)
 
     try:
         SteamInformation.get_steam_player_summaries(steamid)
     except AppError as exc:
-        return _steam_callback_app_error(exc, language)
+        return _steam_callback_app_error(exc, language, operation_id)
     except Exception:
         logger.exception("Steam 玩家信息获取发生未知错误")
-        return _steam_callback_error("player_failed", 500, language)
+        return _steam_callback_error(
+            "player_failed", 500, language, operation_id=operation_id
+        )
 
     try:
         games = SteamInformation.get_owned_games(steamid)
     except AppError as exc:
-        return _steam_callback_app_error(exc, language)
+        return _steam_callback_app_error(exc, language, operation_id)
     except Exception:
         logger.exception("Steam 游戏库获取发生未知错误")
-        return _steam_callback_error("library_failed", 500, language)
+        return _steam_callback_error(
+            "library_failed", 500, language, operation_id=operation_id
+        )
 
     logger.info("Steam 回调: steamid=%s, 获取到 %d 款游戏", steamid, len(games))
 
     if not games:
-        return _steam_callback_error("library_empty", 422, language)
+        return _steam_callback_error(
+            "library_empty", 422, language, operation_id=operation_id
+        )
 
     # 去重 + 远程注册
     try:
@@ -313,16 +409,36 @@ def steam_callback(request: Request):
         games = _dedup_games(games, steamid, mgr)
         registered = mgr.register_remote_images(games, steam_id=steamid, group_id=sid)
     except AppError as exc:
-        return _steam_callback_app_error(exc, language)
+        return _steam_callback_app_error(exc, language, operation_id)
     except Exception:
         logger.exception("Steam 回调注册远程图片失败")
-        return _steam_callback_error("import_failed", 500, language)
+        return _steam_callback_error(
+            "import_failed", 500, language, operation_id=operation_id
+        )
     logger.info("远程注册完成: %d 款，可直接展示", registered)
+
+    _set_steam_import_job(
+        operation_id,
+        status="complete",
+        steamid=steamid,
+        total=registered,
+        message=_steam_callback_text("covers_loaded", language, count=registered),
+        error="",
+    )
 
     title = escape(_steam_callback_text("import_title", language))
     complete = escape(_steam_callback_text("import_complete", language))
     covers_loaded = escape(_steam_callback_text("covers_loaded", language, count=registered))
     background_download = escape(_steam_callback_text("background_download", language))
+    completion_payload = json.dumps(
+        {
+            "type": "steam-import-done",
+            "operation_id": operation_id,
+            "steamid": steamid,
+            "total": registered,
+        },
+        ensure_ascii=False,
+    )
     html = (
         '<!DOCTYPE html>\n'
         f'<html lang="{language}">\n'
@@ -334,7 +450,7 @@ def steam_callback(request: Request):
         '<script>\n'
         '(function() {\n'
         '    if (window.opener && !window.opener.closed) {\n'
-        '        window.opener.postMessage({ type: "steam-import-done" }, "*");\n'
+        f'        window.opener.postMessage({completion_payload}, "*");\n'
         '    }\n'
         '    setTimeout(function() { window.close(); }, 3000);\n'
         '})();\n'
@@ -871,4 +987,3 @@ async def list_cache_sources():
         count = len(_os.listdir(d)) if _os.path.exists(d) else 0
         sources[folder] = count
     return {"sources": sources, "total": sum(sources.values())}
-

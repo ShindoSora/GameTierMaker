@@ -1565,6 +1565,9 @@ function App() {
   // Steam 导入进度面板
   const [steamProgress, setSteamProgress] = useState(null);
   const [steamAccounts, setSteamAccounts] = useState({});
+  const steamImportPollTokenRef = useRef(0);
+  const handledSteamImportsRef = useRef(new Set());
+  const backfillRunningRef = useRef(false);
 
   // PSN settings
   const [psnNpsso, setPsnNpsso] = useState('');
@@ -1663,6 +1666,7 @@ function App() {
   }, []);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
+  const handleGlobalRefresh = () => window.location.reload();
 
   const handleLogResize = event => {
     event.preventDefault();
@@ -1775,22 +1779,89 @@ function App() {
   // 让 postMessage 回调始终能取到最新的 state
   useEffect(() => { appStateRef.current = { currentId, loadCurrentTemplate, setShowSettings }; });
 
-  // 监听 Steam 回调 / 账号同步 —— 远程图片已注册，刷新 UI + 触发后台回填
+  const handleSteamImportComplete = async result => {
+    const operationId = String(result?.operation_id || '');
+    if (operationId && handledSteamImportsRef.current.has(operationId)) return;
+    if (operationId) handledSteamImportsRef.current.add(operationId);
+    try {
+      if (sessionStorage.getItem('steam-import-operation') === operationId) {
+        sessionStorage.removeItem('steam-import-operation');
+      }
+    } catch (error) { /* session storage is optional */ }
+
+    const activeTemplateId = appStateRef.current.currentId;
+    if (activeTemplateId) {
+      await appStateRef.current.loadCurrentTemplate(activeTemplateId);
+    }
+    await loadSteamAccounts();
+
+    const total = Number(result?.total);
+    showToast(
+      Number.isFinite(total)
+        ? t('steam.loadedCovers', {count: total})
+        : t('steam.coversLoaded'),
+      'success'
+    );
+    showToast(t('library.dragDisabledWhileDownloading'), '');
+    runBackfill();
+  };
+
+  const monitorSteamImport = async operationId => {
+    if (!operationId) return;
+    const pollToken = ++steamImportPollTokenRef.current;
+    const deadline = Date.now() + 10 * 60 * 1000;
+    let requestFailures = 0;
+
+    while (pollToken === steamImportPollTokenRef.current && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        const result = await fetchAPI(`/settings/steam/import-status/${encodeURIComponent(operationId)}`);
+        requestFailures = 0;
+        if (result.status === 'complete') {
+          await handleSteamImportComplete(result);
+          return;
+        }
+        if (result.status === 'error') {
+          try { sessionStorage.removeItem('steam-import-operation'); }
+          catch (error) { /* session storage is optional */ }
+          showToast(result.message || t('errors.bindFailed'), 'error');
+          await loadSteamAccounts();
+          return;
+        }
+      } catch (error) {
+        requestFailures += 1;
+        if (requestFailures >= 5) {
+          showToast(getErrorMessage(error, 'errors.backendUnavailable'), 'error');
+          return;
+        }
+      }
+    }
+
+    if (pollToken === steamImportPollTokenRef.current) {
+      try { sessionStorage.removeItem('steam-import-operation'); }
+      catch (error) { /* session storage is optional */ }
+      showToast(t('steam.bindTimeout'), 'error');
+    }
+  };
+
+  // 监听 Steam 回调。浏览器模式可直接收到消息；EXE 模式由状态轮询兜底。
   useEffect(() => {
     const handler = async (event) => {
+      if (event.origin !== window.location.origin) return;
       if (!event.data || event.data.type !== 'steam-import-done') return;
-      const { currentId, loadCurrentTemplate } = appStateRef.current;
-      if (currentId) {
-        await loadCurrentTemplate(currentId);
-      }
-      loadSteamAccounts();
-      showToast(t('steam.coversLoaded'), 'success');
-      showToast(t('library.dragDisabledWhileDownloading'), '');
-      runBackfill();
+      await handleSteamImportComplete(event.data);
     };
 
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const pendingOperation = sessionStorage.getItem('steam-import-operation');
+      if (pendingOperation) monitorSteamImport(pendingOperation);
+    } catch (error) { /* session storage is optional */ }
+    return () => { steamImportPollTokenRef.current += 1; };
   }, []);
 
   const loadData = async () => {
@@ -2207,7 +2278,10 @@ function App() {
   const handleSteamJump = async () => {
     try {
       const res = await fetchAPI('/settings/steam/jump', { method: 'POST', body: JSON.stringify({ game_name: '' }) });
+      try { sessionStorage.setItem('steam-import-operation', res.operation_id || ''); }
+      catch (error) { /* session storage is optional */ }
       window.open(res.url, '_blank');
+      monitorSteamImport(res.operation_id);
     } catch(e) { showToast(getErrorMessage(e, 'errors.redirectFailed'), 'error'); }
   };
 
@@ -2415,6 +2489,8 @@ function App() {
 
   // 后台回填循环：逐批下载远程图片到本地
   const runBackfill = async () => {
+    if (backfillRunningRef.current) return;
+    backfillRunningRef.current = true;
     let ok = 0, fail = 0;
     setBackfill({ ok: 0, fail: 0, remaining: -1 });  // -1 表示"正在检查"，触发 UI 渲染
     try {
@@ -2427,7 +2503,11 @@ function App() {
       const { currentId, loadCurrentTemplate } = appStateRef.current;
       if (currentId) await loadCurrentTemplate(currentId);
       setTimeout(() => setBackfill(null), 3000);
-    } catch(e) { setBackfill(null); }
+    } catch(e) {
+      setBackfill(null);
+    } finally {
+      backfillRunningRef.current = false;
+    }
   };
 
   if (!languageReady || (loading && tiers.length === 0)) {
@@ -2555,6 +2635,16 @@ function App() {
               ) : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
               )}
+            </button>
+            <button className="btn btn-xs btn-icon" onClick={handleGlobalRefresh}
+              title={t('actions.refreshAll')} aria-label={t('actions.refreshAll')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6v5h-5" />
+                <path d="M4 18v-5h5" />
+                <path d="M18.5 9A7 7 0 006.8 6.8L4 11" />
+                <path d="M5.5 15A7 7 0 0017.2 17.2L20 13" />
+              </svg>
             </button>
           </div>
 
