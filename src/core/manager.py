@@ -1122,19 +1122,6 @@ class ProjectManager:
                 tier.image_ids = [id for id in tier.image_ids if id not in image_ids]
         self.save_project()
 
-    def is_steam_duplicate(self, appid: str, steam_id: str) -> bool:
-        """去重：检查指定 appid + steam_id 的游戏封面是否已成功导入。
-        已标记 remote_failed 的不算重复，允许重新注册以触发搜索兜底。"""
-        target_name = str(appid) + ".jpg"
-        for meta in self.project_data.shared_images_meta.values():
-            if getattr(meta, 'steam_id', '') == steam_id:
-                if meta.original_name == target_name:
-                    if meta.remote_failed:
-                        # 之前下载失败，删除旧记录，允许重新来
-                        continue
-                    return True
-        return False
-
     def delete_images_by_steam_id(self, steam_id: str) -> int:
         """删除指定 Steam ID 关联的所有图片（不删账号配置）"""
         ids_to_delete = []
@@ -1147,17 +1134,19 @@ class ProjectManager:
         return len(ids_to_delete)
 
     def register_remote_images(self, games, steam_id, group_id):
-        """注册远程图片元数据（仅写 JSON，不下载文件），返回注册数量"""
+        """注册远程图片，或将已有 Steam 图片关联到当前模板分组。"""
         if not self.current_template:
             return 0
         import uuid as _uuid
         count = 0
+        changed = False
         group = self._lib().find_group_by_id(group_id)
         if not group:
             group = ImageGroup(id=group_id, name=group_id, image_ids=[])
             self._lib().groups.append(group)
             if self.current_template:
                 self.current_template.library_group_states[group_id] = True
+            changed = True
 
         for game in games:
             cover_url = (game.get("cover") or {}).get("url", "")
@@ -1169,20 +1158,40 @@ class ProjectManager:
             game_name = game.get("name", "")
             target_name = appid + ".jpg"
 
-            # 检查是否已有 remote_failed 的旧记录，有则原地修复（补 game_name）
+            # Steam 图片元数据全局共享，但图片组属于各自模板。同步到新模板时
+            # 复用已有图片 ID，并为当前模板建立分组引用，避免生成重复文件。
             existing = None
             for img_id, meta in self.project_data.shared_images_meta.items():
                 if (getattr(meta, 'steam_id', '') == steam_id
                         and meta.original_name == target_name
-                        and meta.remote_failed):
+                        and (steam_id or meta.remote_failed)):
                     existing = (img_id, meta)
                     break
             if existing:
-                existing[1].game_name = game_name
-                existing[1].remote_failed = False
-                existing[1].is_remote = True
-                existing[1].path = cover_url
-                count += 1
+                image_id, meta = existing
+                item_changed = False
+                imported_to_template = False
+
+                if game_name and meta.game_name != game_name:
+                    meta.game_name = game_name
+                    item_changed = True
+
+                if meta.remote_failed:
+                    meta.remote_failed = False
+                    meta.is_remote = True
+                    meta.path = cover_url
+                    item_changed = True
+                    imported_to_template = True
+
+                if image_id not in group.image_ids:
+                    group.image_ids.append(image_id)
+                    item_changed = True
+                    imported_to_template = True
+
+                if item_changed:
+                    changed = True
+                if imported_to_template:
+                    count += 1
                 continue
 
             image_id = str(_uuid.uuid4())
@@ -1195,8 +1204,9 @@ class ProjectManager:
             self.project_data.shared_images_meta[image_id] = img_obj
             group.image_ids.append(image_id)
             count += 1
+            changed = True
 
-        if count:
+        if changed:
             self.save_project()
         return count
 

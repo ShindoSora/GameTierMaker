@@ -403,10 +403,9 @@ def steam_callback(request: Request):
             "library_empty", 422, language, operation_id=operation_id
         )
 
-    # 去重 + 远程注册
+    # 注册或复用已有图片，并关联到当前模板的 Steam 分组
     try:
         mgr, sid = _ensure_steam_group(steamid)
-        games = _dedup_games(games, steamid, mgr)
         registered = mgr.register_remote_images(games, steam_id=steamid, group_id=sid)
     except AppError as exc:
         return _steam_callback_app_error(exc, language, operation_id)
@@ -415,7 +414,7 @@ def steam_callback(request: Request):
         return _steam_callback_error(
             "import_failed", 500, language, operation_id=operation_id
         )
-    logger.info("远程注册完成: %d 款，可直接展示", registered)
+    logger.info("Steam 图片同步完成: 当前模板新增或恢复 %d 款", registered)
 
     _set_steam_import_job(
         operation_id,
@@ -496,7 +495,7 @@ async def delete_steam_account_images(steamid: str):
 
 @router.post("/steam/accounts/{steamid}/sync")
 async def sync_steam_account(steamid: str):
-    """同步账号游戏库：获取列表 -> 去重 -> 远程注册（不下载）"""
+    """同步账号游戏库：获取列表 -> 注册或复用图片 -> 关联当前模板分组。"""
     games = SteamInformation.get_owned_games(steamid)
 
     if not games:
@@ -506,9 +505,8 @@ async def sync_steam_account(steamid: str):
         )
 
     mgr, sid = _ensure_steam_group(steamid)
-    games = _dedup_games(games, steamid, mgr)
     registered = mgr.register_remote_images(games, steam_id=steamid, group_id=sid)
-    logger.info("同步账号 %s: 远程注册 %d 款", steamid, registered)
+    logger.info("同步账号 %s: 当前模板新增或恢复 %d 款", steamid, registered)
     return {"ok": True, "total": registered}
 
 
@@ -549,12 +547,6 @@ def _ensure_steam_group(steamid):
             mgr.current_template.library_group_states[sid] = True
         mgr.save_project()
     return mgr, sid
-
-
-def _dedup_games(games, steam_id, mgr):
-    def _is_dup(game):
-        return mgr.is_steam_duplicate(str(game.get("appid", "")), steam_id)
-    return [g for g in games if not _is_dup(g)]
 
 
 def _ensure_psn_group(account_id, online_id):
