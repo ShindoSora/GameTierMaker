@@ -728,6 +728,81 @@ function calculateTierExportWidth(source) {
   );
 }
 
+function applyExplicitExportImageFit(image, naturalWidth, naturalHeight, box, fit, verticalPosition = 'center') {
+  if (!image || !naturalWidth || !naturalHeight || !box.width || !box.height) return;
+  const scale = fit === 'cover'
+    ? Math.max(box.width / naturalWidth, box.height / naturalHeight)
+    : Math.min(box.width / naturalWidth, box.height / naturalHeight);
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
+  const left = box.left + (box.width - width) / 2;
+  const top = verticalPosition === 'top'
+    ? box.top
+    : box.top + (box.height - height) / 2;
+
+  Object.assign(image.style, {
+    inset: 'auto',
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+    height: `${height}px`,
+    maxWidth: 'none',
+    maxHeight: 'none',
+    objectFit: 'fill',
+    objectPosition: 'center',
+  });
+}
+
+function prepareExportRowImages(sourceRow, clonedRow) {
+  const sourceCards = Array.from(sourceRow.querySelectorAll('.drag-image'));
+  const clonedCards = Array.from(clonedRow.querySelectorAll('.drag-image'));
+
+  sourceCards.forEach((sourceCard, index) => {
+    const clonedCard = clonedCards[index];
+    const sourceForeground = sourceCard.querySelector('.drag-image-foreground');
+    const clonedForeground = clonedCard?.querySelector('.drag-image-foreground');
+    if (!clonedCard || !sourceForeground || !clonedForeground) return;
+
+    const naturalWidth = sourceForeground.naturalWidth;
+    const naturalHeight = sourceForeground.naturalHeight;
+    if (!naturalWidth || !naturalHeight) return;
+
+    const outerWidth = sourceCard.offsetWidth || 100;
+    const outerHeight = sourceCard.offsetHeight || 100;
+    const contentWidth = sourceCard.clientWidth || outerWidth;
+    const contentHeight = sourceCard.clientHeight || outerHeight;
+    const useTopCrop = sourceCard.classList.contains('top-crop');
+
+    Object.assign(clonedCard.style, {
+      flex: `0 0 ${outerWidth}px`,
+      width: `${outerWidth}px`,
+      height: `${outerHeight}px`,
+      transform: 'none',
+    });
+    clonedCard.classList.remove('dragging');
+
+    applyExplicitExportImageFit(
+      clonedForeground,
+      naturalWidth,
+      naturalHeight,
+      { left: 0, top: 0, width: contentWidth, height: contentHeight },
+      useTopCrop ? 'cover' : 'contain',
+      useTopCrop ? 'top' : 'center',
+    );
+
+    const clonedBackdrop = clonedCard.querySelector('.drag-image-backdrop');
+    if (clonedBackdrop) {
+      applyExplicitExportImageFit(
+        clonedBackdrop,
+        naturalWidth,
+        naturalHeight,
+        { left: -10, top: -10, width: contentWidth + 20, height: contentHeight + 20 },
+        'cover',
+      );
+    }
+  });
+}
+
 function createTierExportElement(source, width) {
   const rows = Array.from(source.querySelectorAll('.tier-row-container'));
   if (!rows.length) return null;
@@ -751,6 +826,7 @@ function createTierExportElement(source, width) {
     clone.style.width = '100%';
     clone.style.overflow = 'visible';
     clone.style.transform = 'none';
+    prepareExportRowImages(row, clone);
     exportArea.appendChild(clone);
   });
 
