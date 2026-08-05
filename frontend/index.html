@@ -2017,9 +2017,11 @@ function App() {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+    const query = searchQuery.trim();
+    if (!query) return;
+    setSearchResults(null);
     try {
-      const res = await fetchAPI('/images/search', { method: 'POST', body: JSON.stringify({ query: searchQuery.trim() }) });
+      const res = await fetchAPI('/images/search', { method: 'POST', body: JSON.stringify({ query }) });
       setSearchResults(res.results);
     } catch(e) {
       showToast(getErrorMessage(e, 'errors.searchFailed'), 'error');

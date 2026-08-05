@@ -22,7 +22,7 @@ class SearchIDGB:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "text/plain",
         }
-        query_body = f'search "{game_name}"; fields name, cover.url; limit 20;'
+        query_body = f'search "{game_name}"; fields name, cover.url; limit 200;'
 
         try:
             logger.debug("搜索游戏: %s", game_name)
