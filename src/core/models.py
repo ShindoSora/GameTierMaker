@@ -15,6 +15,7 @@ class TierImage:
     path: str  # 本地相对路径或远程 URL
     original_name: str # 原始文件名
     steam_id: str = ""  # 关联的 Steam ID
+    source_group_id: str = ""  # 平台账号图片组 ID，用于跨模板同步和去重
     is_remote: bool = False  # True 时 path 为远程 URL，展示时直连
     remote_failed: bool = False  # 远程图片下载永久失败，不再重试
     game_name: str = ""  # 游戏名，搜索兜底时用

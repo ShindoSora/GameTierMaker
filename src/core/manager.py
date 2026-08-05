@@ -1027,31 +1027,31 @@ class ProjectManager:
 
     def move_image(self, image_id: str, source_type: str, source_id: str, target_type: str, target_id: str, index: int = -1):
         """
-        通用的移动逻辑
+        在图片组、未排序列表和等级行之间移动图片，当前模板中只保留一个位置。
         Types: 'library_group', 'tier', 'unassigned'
         """
         if not self.current_template:
             return
 
-        # 1. 从源移除
-        self._remove_image_ref(source_type, source_id, image_id)
+        if target_type not in ('library_group', 'tier', 'unassigned'):
+            return
 
-        # 2. 添加到目标
+        self._remove_layout_refs(image_id)
+        self._remove_library_refs(image_id)
         self._add_image_ref(target_type, target_id, image_id, index)
-        
         self.save_project()
 
-    def _remove_image_ref(self, zone_type: str, zone_id: str, image_id: str):
-        """从所有区域移除图片引用，防止残留导致重复"""
+    def _remove_layout_refs(self, image_id: str):
+        """从当前模板的等级行和未排序列表移除图片引用。"""
         t = self.current_template
-        # Remove from all tiers
         for tier in (t.tiers if t else []):
             if image_id in tier.image_ids:
                 tier.image_ids.remove(image_id)
-        # Remove from unassigned
         if t and image_id in t.unassigned_images:
             t.unassigned_images.remove(image_id)
-        # Remove from all library groups
+
+    def _remove_library_refs(self, image_id: str):
+        """从当前模板的所有图片库分组移除图片引用。"""
         for group in self._lib().groups:
             if image_id in group.image_ids:
                 group.image_ids.remove(image_id)
@@ -1133,8 +1133,12 @@ class ProjectManager:
         self.save_project()
         return len(ids_to_delete)
 
-    def register_remote_images(self, games, steam_id, group_id):
-        """注册远程图片，或将已有 Steam 图片关联到当前模板分组。"""
+    def register_remote_images(self, games, steam_id, group_id, replace_group=False):
+        """注册或复用平台图片，并把尚未排序的图片放入账号图片组。
+
+        replace_group=True 时只重建未放入布局的分组引用；已经位于未排序列表
+        或等级行中的图片保持原位，不会重新出现在图片组。返回识别到的封面数。
+        """
         if not self.current_template:
             return 0
         import uuid as _uuid
@@ -1148,6 +1152,22 @@ class ProjectManager:
                 self.current_template.library_group_states[group_id] = True
             changed = True
 
+        previous_group_ids = set(group.image_ids)
+        for image_id in previous_group_ids:
+            meta = self.project_data.shared_images_meta.get(image_id)
+            if meta and not getattr(meta, 'source_group_id', ''):
+                meta.source_group_id = group_id
+                changed = True
+
+        layout_image_ids = set(self.current_template.unassigned_images)
+        for tier in self.current_template.tiers:
+            layout_image_ids.update(tier.image_ids)
+
+        if replace_group and group.image_ids:
+            group.image_ids.clear()
+            changed = True
+
+        processed_names = set()
         for game in games:
             cover_url = (game.get("cover") or {}).get("url", "")
             if not cover_url:
@@ -1157,20 +1177,41 @@ class ProjectManager:
             appid = str(game.get("appid", ""))
             game_name = game.get("name", "")
             target_name = appid + ".jpg"
+            if not appid or target_name in processed_names:
+                continue
+            processed_names.add(target_name)
 
-            # Steam 图片元数据全局共享，但图片组属于各自模板。同步到新模板时
-            # 复用已有图片 ID，并为当前模板建立分组引用，避免生成重复文件。
-            existing = None
+            # 优先使用已标记的来源身份；兼容旧项目中仅靠 Steam ID、原图片组
+            # 或当前布局引用识别的平台图片。
+            candidates = []
             for img_id, meta in self.project_data.shared_images_meta.items():
-                if (getattr(meta, 'steam_id', '') == steam_id
-                        and meta.original_name == target_name
-                        and (steam_id or meta.remote_failed)):
-                    existing = (img_id, meta)
-                    break
+                if meta.original_name != target_name:
+                    continue
+
+                source_group_id = getattr(meta, 'source_group_id', '')
+                meta_steam_id = getattr(meta, 'steam_id', '')
+                priority = None
+                if source_group_id == group_id:
+                    priority = 0
+                elif not source_group_id and img_id in previous_group_ids:
+                    priority = 1
+                elif not source_group_id and steam_id and meta_steam_id == steam_id:
+                    priority = 2
+                elif (not source_group_id and not steam_id and not meta_steam_id
+                        and img_id in layout_image_ids):
+                    priority = 3
+
+                if priority is not None:
+                    candidates.append((priority, img_id, meta))
+
+            existing = min(candidates, default=None, key=lambda item: item[0])
             if existing:
-                image_id, meta = existing
+                _, image_id, meta = existing
                 item_changed = False
-                imported_to_template = False
+
+                if getattr(meta, 'source_group_id', '') != group_id:
+                    meta.source_group_id = group_id
+                    item_changed = True
 
                 if game_name and meta.game_name != game_name:
                     meta.game_name = game_name
@@ -1181,24 +1222,21 @@ class ProjectManager:
                     meta.is_remote = True
                     meta.path = cover_url
                     item_changed = True
-                    imported_to_template = True
 
-                if image_id not in group.image_ids:
+                if image_id not in layout_image_ids and image_id not in group.image_ids:
                     group.image_ids.append(image_id)
                     item_changed = True
-                    imported_to_template = True
 
                 if item_changed:
                     changed = True
-                if imported_to_template:
-                    count += 1
+                count += 1
                 continue
 
             image_id = str(_uuid.uuid4())
             img_obj = TierImage(
                 id=image_id, path=cover_url,
                 original_name=target_name,
-                steam_id=steam_id, is_remote=True,
+                steam_id=steam_id, source_group_id=group_id, is_remote=True,
                 game_name=game_name
             )
             self.project_data.shared_images_meta[image_id] = img_obj

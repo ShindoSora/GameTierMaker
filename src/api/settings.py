@@ -406,7 +406,12 @@ def steam_callback(request: Request):
     # 注册或复用已有图片，并关联到当前模板的 Steam 分组
     try:
         mgr, sid = _ensure_steam_group(steamid)
-        registered = mgr.register_remote_images(games, steam_id=steamid, group_id=sid)
+        registered = mgr.register_remote_images(
+            games,
+            steam_id=steamid,
+            group_id=sid,
+            replace_group=True,
+        )
     except AppError as exc:
         return _steam_callback_app_error(exc, language, operation_id)
     except Exception:
@@ -414,7 +419,7 @@ def steam_callback(request: Request):
         return _steam_callback_error(
             "import_failed", 500, language, operation_id=operation_id
         )
-    logger.info("Steam 图片同步完成: 当前模板新增或恢复 %d 款", registered)
+    logger.info("Steam 图片同步完成: 识别 %d 款游戏封面", registered)
 
     _set_steam_import_job(
         operation_id,
@@ -505,8 +510,13 @@ async def sync_steam_account(steamid: str):
         )
 
     mgr, sid = _ensure_steam_group(steamid)
-    registered = mgr.register_remote_images(games, steam_id=steamid, group_id=sid)
-    logger.info("同步账号 %s: 当前模板新增或恢复 %d 款", steamid, registered)
+    registered = mgr.register_remote_images(
+        games,
+        steam_id=steamid,
+        group_id=sid,
+        replace_group=True,
+    )
+    logger.info("同步账号 %s: 识别 %d 款游戏封面", steamid, registered)
     return {"ok": True, "total": registered}
 
 
@@ -569,31 +579,6 @@ def _ensure_psn_group(account_id, online_id):
         mgr.save_project()
     return sid
 
-
-def _dedup_psn_titles(titles, account_id, mgr):
-    """去重：检查 PSN 游戏是否已导入"""
-    def _is_dup(title):
-        appid = str(title.get("appid", ""))
-        target_name = appid + ".jpg"
-        for meta in mgr.project_data.shared_images_meta.values():
-            if meta.original_name == target_name:
-                if not meta.remote_failed:
-                    return True
-        return False
-    return [t for t in titles if not _is_dup(t)]
-
-
-def _clear_psn_group_images(group_id: str, mgr):
-    """清空指定分组的图片数据（meta + image_ids），为重新同步做准备"""
-    group = mgr._lib().find_group_by_id(group_id)
-    if not group:
-        return
-    count = len(group.image_ids)
-    for img_id in list(group.image_ids):
-        mgr.delete_image_globally(img_id)
-    group.image_ids.clear()
-    mgr.save_project()
-    logger.info("PSN 分组 %s 已清空 %d 张旧图片，准备重新同步", group_id, count)
 
 # === PSN 设置与账号管理 ===
 
@@ -719,9 +704,13 @@ async def sync_psn_account(account_id: str):
         })
 
     sid = _ensure_psn_group(aid, online_id)
-    _clear_psn_group_images(sid, mgr)
-    registered = mgr.register_remote_images(normalized_titles, steam_id="", group_id=sid)
-    logger.info("PSN 同步账号 %s (%s): 远程注册 %d 款", account_id, online_id, registered)
+    registered = mgr.register_remote_images(
+        normalized_titles,
+        steam_id="",
+        group_id=sid,
+        replace_group=True,
+    )
+    logger.info("PSN 同步账号 %s (%s): 识别 %d 款游戏封面", account_id, online_id, registered)
     return {"ok": True, "total": registered, "account_id": aid}
 
 
@@ -769,9 +758,13 @@ async def bind_psn_account(req: PSNBindRequest):
         })
 
     sid = _ensure_psn_group(aid, online_id)
-    _clear_psn_group_images(sid, mgr)
-    registered = mgr.register_remote_images(normalized_titles, steam_id="", group_id=sid)
-    logger.info("PSN 绑定完成: account_id=%s (%s), 远程注册 %d 款", aid, online_id, registered)
+    registered = mgr.register_remote_images(
+        normalized_titles,
+        steam_id="",
+        group_id=sid,
+        replace_group=True,
+    )
+    logger.info("PSN 绑定完成: account_id=%s (%s), 识别 %d 款游戏封面", aid, online_id, registered)
     return {"ok": True, "total": registered, "account_id": aid}
 
 
@@ -914,9 +907,13 @@ def _register_xbox_titles(result, mgr):
         })
 
     sid = _ensure_xbox_group(xuid, gamertag)
-    _clear_psn_group_images(sid, mgr)  # 复用 PSN 的清理逻辑
-    registered = mgr.register_remote_images(normalized, steam_id="", group_id=sid)
-    logger.info("Xbox 注册完成: xuid=%s (%s), 远程注册 %d 款", xuid, gamertag, registered)
+    registered = mgr.register_remote_images(
+        normalized,
+        steam_id="",
+        group_id=sid,
+        replace_group=True,
+    )
+    logger.info("Xbox 注册完成: xuid=%s (%s), 识别 %d 款游戏封面", xuid, gamertag, registered)
     return {"ok": True, "total": registered, "xuid": xuid, "gamertag": gamertag}
 
 

@@ -52,8 +52,8 @@ async def list_groups():
 
     images_meta = {}
     for img_id, meta in mgr.project_data.shared_images_meta.items():
-        # 搜索和上传图片导入后都是本地图片；图片移入等级行或未排序列表
-        # 后会从隐藏图片库分组移除，因此不能只依赖分组 ID 判断显示模式。
+        # 搜索和上传图片移入等级行或未排序列表后会离开原图片组，
+        # 因此不能只依赖分组 ID 判断显示模式。
         use_top_crop = (
             bool(meta.steam_id)
             or not meta.is_remote
