@@ -3,7 +3,6 @@
 """
 import json
 import os
-import shutil
 import threading
 import time
 import uuid
@@ -16,6 +15,7 @@ import requests
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 from src.core.config_handler import (
     ConfigHandler,
     DEFAULT_UI_LANGUAGE,
@@ -37,49 +37,85 @@ from src.core.export_service import (
     get_runtime_mode,
     save_download_directory_setting,
 )
+from src.core.licenses import OPEN_SOURCE_LICENSES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-image_cache = "./data/cache"
 
 _STEAM_IMPORT_JOBS: dict[str, dict[str, object]] = {}
 _STEAM_IMPORT_JOBS_LOCK = threading.RLock()
 _STEAM_IMPORT_JOB_TTL_SECONDS = 30 * 60
+_ACCOUNT_OPERATION_LOCKS: dict[str, threading.Lock] = {}
+_ACCOUNT_OPERATION_LOCKS_GUARD = threading.Lock()
 
 
-def _set_steam_import_job(operation_id: str, **changes) -> None:
+def _account_operation_lock(platform: str, account_id: str) -> threading.Lock:
+    key = f"{platform}:{account_id}"
+    with _ACCOUNT_OPERATION_LOCKS_GUARD:
+        return _ACCOUNT_OPERATION_LOCKS.setdefault(key, threading.Lock())
+
+
+def _prune_steam_import_jobs_locked(now: float) -> None:
+    expired = [
+        job_id
+        for job_id, job in _STEAM_IMPORT_JOBS.items()
+        if now - float(job.get("updated_at", now)) > _STEAM_IMPORT_JOB_TTL_SECONDS
+    ]
+    for job_id in expired:
+        _STEAM_IMPORT_JOBS.pop(job_id, None)
+
+
+def _set_steam_import_job(
+    operation_id: str,
+    *,
+    create: bool = True,
+    **changes,
+) -> bool:
     """Store Steam callback progress so the embedded EXE can poll it."""
     if not operation_id:
-        return
+        return False
     now = time.time()
     with _STEAM_IMPORT_JOBS_LOCK:
-        expired = [
-            job_id
-            for job_id, job in _STEAM_IMPORT_JOBS.items()
-            if now - float(job.get("updated_at", now)) > _STEAM_IMPORT_JOB_TTL_SECONDS
-        ]
-        for job_id in expired:
-            _STEAM_IMPORT_JOBS.pop(job_id, None)
+        _prune_steam_import_jobs_locked(now)
 
-        job = _STEAM_IMPORT_JOBS.setdefault(
-            operation_id,
-            {
+        job = _STEAM_IMPORT_JOBS.get(operation_id)
+        if job is None:
+            if not create:
+                return False
+            job = {
                 "operation_id": operation_id,
                 "status": "pending",
                 "steamid": "",
                 "total": 0,
                 "message": "",
                 "error": "",
-            },
-        )
+            }
+            _STEAM_IMPORT_JOBS[operation_id] = job
         job.update(changes)
         job["updated_at"] = now
+        return True
 
 
 def _get_steam_import_job(operation_id: str) -> dict[str, object] | None:
     with _STEAM_IMPORT_JOBS_LOCK:
+        _prune_steam_import_jobs_locked(time.time())
         job = _STEAM_IMPORT_JOBS.get(operation_id)
         return dict(job) if job else None
+
+
+def _claim_steam_import_job(operation_id: str) -> dict[str, object] | None:
+    """Atomically consume a pending OpenID state and reject replay attempts."""
+    if not operation_id:
+        return None
+    now = time.time()
+    with _STEAM_IMPORT_JOBS_LOCK:
+        _prune_steam_import_jobs_locked(now)
+        job = _STEAM_IMPORT_JOBS.get(operation_id)
+        if not job or job.get("status") != "pending":
+            return None
+        job["status"] = "processing"
+        job["updated_at"] = now
+        return dict(job)
 
 
 _STEAM_CALLBACK_TEXTS = {
@@ -163,12 +199,14 @@ def _steam_callback_error(
     """Return a safe error page for the browser-based Steam callback."""
     language = language or _steam_callback_language()
     raw_message = _steam_callback_text(message_key, language)
-    _set_steam_import_job(
-        operation_id,
-        status="error",
-        message=raw_message,
-        error=error_code or message_key,
-    )
+    if operation_id:
+        _set_steam_import_job(
+            operation_id,
+            create=False,
+            status="error",
+            message=raw_message,
+            error=error_code or message_key,
+        )
     title = escape(_steam_callback_text("error_title", language))
     message = escape(raw_message)
     html = (
@@ -206,16 +244,16 @@ def _steam_callback_app_error(
 
 class IgdbSettingsRequest(BaseModel):
     client_id: str
-    client_secret: str
+    client_secret: str | None = None
 
 
 class BangumiSettingsRequest(BaseModel):
     bangumi_user_agent: str = ""
-    bangumi_token: str = ""
+    bangumi_token: str | None = None
 
 
 class SteamSettingsRequest(BaseModel):
-    steam_key: str = ""
+    steam_key: str | None = None
 
 
 class SteamJumpRequest(BaseModel):
@@ -231,12 +269,12 @@ class DownloadDirectorySettingsRequest(BaseModel):
 
 
 @router.get("/language")
-async def get_ui_language():
+def get_ui_language():
     return {"language": ConfigHandler.get_ui_language()}
 
 
 @router.put("/language")
-async def update_ui_language(req: LanguageSettingsRequest):
+def update_ui_language(req: LanguageSettingsRequest):
     language = req.language.strip()
     if language not in SUPPORTED_UI_LANGUAGES:
         raise InvalidInputError(
@@ -248,12 +286,12 @@ async def update_ui_language(req: LanguageSettingsRequest):
 
 
 @router.get("/download")
-async def get_download_directory_settings():
+def get_download_directory_settings():
     return get_download_settings()
 
 
 @router.put("/download")
-async def update_download_directory_settings(req: DownloadDirectorySettingsRequest):
+def update_download_directory_settings(req: DownloadDirectorySettingsRequest):
     if get_runtime_mode() != "desktop":
         raise InvalidInputError(
             "浏览器模式的下载位置由浏览器管理",
@@ -263,52 +301,101 @@ async def update_download_directory_settings(req: DownloadDirectorySettingsReque
 
 
 @router.get("")
-async def get_settings():
-    return ConfigHandler.read_config()
+def get_settings():
+    config = ConfigHandler.read_config()
+    public_fields = (
+        "client_id",
+        "bangumi_user_agent",
+        "psn_online_id",
+        "ui_language",
+        "download_directory",
+    )
+    result = {
+        field: ConfigHandler.deep_get(config, field)
+        for field in public_fields
+        if ConfigHandler.deep_get(config, field) is not None
+    }
+    result["configured_secrets"] = {
+        field: bool(ConfigHandler.deep_get(config, field))
+        for field in ("client_secret", "bangumi_token", "steam_key", "psn_npsso")
+    }
+    return result
+
+
+@router.get("/licenses")
+def get_open_source_licenses():
+    """Return the licenses displayed by the local settings panel."""
+    return {"licenses": [dict(license_info) for license_info in OPEN_SOURCE_LICENSES]}
+
+
+@router.get("/secret/{field_name}")
+def reveal_setting_secret(field_name: str):
+    """Return one credential only after an explicit action in the local UI."""
+    allowed = {"client_secret", "bangumi_token", "steam_key", "psn_npsso"}
+    if field_name not in allowed:
+        raise InvalidInputError(
+            "不支持读取该设置项",
+            code="setting_secret_invalid",
+        )
+    value = ConfigHandler.deep_get(ConfigHandler.read_config(), field_name)
+    return {"field": field_name, "value": value if isinstance(value, str) else ""}
 
 
 @router.put("/igdb")
-async def update_igdb_settings(req: IgdbSettingsRequest):
-    if not req.client_id.strip() or not req.client_secret.strip():
+def update_igdb_settings(req: IgdbSettingsRequest):
+    current_secret = ConfigHandler.deep_get(
+        ConfigHandler.read_config(), "client_secret"
+    )
+    supplied_secret = req.client_secret.strip() if req.client_secret is not None else None
+    effective_secret = supplied_secret if supplied_secret is not None else current_secret
+    if not req.client_id.strip() or not effective_secret:
         raise InvalidInputError(
             "client_id 和 client_secret 不能为空",
             code="igdb_credentials_required",
         )
-    ConfigHandler.update_config_fields({
+    fields = {
         "client_id": req.client_id.strip(),
-        "client_secret": req.client_secret.strip(),
         "access_token": "",
         "expiration_time": 0,
-    })
+    }
+    if supplied_secret is not None:
+        fields["client_secret"] = supplied_secret
+    ConfigHandler.update_config_fields(fields)
     return {"ok": True}
 
 
 @router.put("/bangumi")
-async def update_bangumi_settings(req: BangumiSettingsRequest):
-    ConfigHandler.update_config_fields({
-        "bangumi_user_agent": req.bangumi_user_agent.strip(),
-        "bangumi_token": req.bangumi_token.strip(),
-    })
+def update_bangumi_settings(req: BangumiSettingsRequest):
+    fields = {"bangumi_user_agent": req.bangumi_user_agent.strip()}
+    if req.bangumi_token is not None:
+        fields["bangumi_token"] = req.bangumi_token.strip()
+    ConfigHandler.update_config_fields(fields)
     return {"ok": True}
 
 
 @router.put("/steam")
-async def update_steam_settings(req: SteamSettingsRequest):
-    ConfigHandler.update_config_fields({
-        "steam_key": req.steam_key.strip(),
-    })
+def update_steam_settings(req: SteamSettingsRequest):
+    if req.steam_key is not None:
+        ConfigHandler.update_config_fields({"steam_key": req.steam_key.strip()})
     return {"ok": True}
 
 
 @router.post("/steam/jump")
-async def steam_jump(request: Request):
+def steam_jump(request: Request, template_id: str | None = None):
     base_url = str(request.base_url).rstrip("/")
+    mgr = get_manager()
+    target_template_id = mgr.get_template(template_id).id
     operation_id = uuid.uuid4().hex
-    _set_steam_import_job(operation_id, status="pending")
     return_to = (
         base_url
         + "/api/settings/steam/callback?"
         + urlencode({"operation_id": operation_id})
+    )
+    _set_steam_import_job(
+        operation_id,
+        status="pending",
+        target_template_id=target_template_id,
+        expected_return_to=return_to,
     )
     params = {
         "openid.ns": "http://specs.openid.net/auth/2.0",
@@ -323,7 +410,7 @@ async def steam_jump(request: Request):
 
 
 @router.get("/steam/import-status/{operation_id}")
-async def steam_import_status(operation_id: str):
+def steam_import_status(operation_id: str):
     job = _get_steam_import_job(operation_id)
     if not job:
         return {"operation_id": operation_id, "status": "unknown"}
@@ -336,11 +423,21 @@ def steam_callback(request: Request):
     language = _steam_callback_language()
     params = dict(request.query_params)
     operation_id = str(params.get("operation_id", "")).strip()
-    _set_steam_import_job(operation_id, status="processing")
+    job = _claim_steam_import_job(operation_id)
+    if not job:
+        return _steam_callback_error(
+            "login_failed", 400, language, error_code="invalid_operation"
+        )
+    target_template_id = str(job.get("target_template_id", "")).strip() or None
+    expected_return_to = str(job.get("expected_return_to", "")).strip()
 
     if params.get("openid.mode") != "id_res":
         return _steam_callback_error(
             "login_failed", 400, language, operation_id=operation_id
+        )
+    if not expected_return_to or params.get("openid.return_to") != expected_return_to:
+        return _steam_callback_error(
+            "identity_failed", 400, language, operation_id=operation_id
         )
 
     verify_params = {
@@ -353,7 +450,10 @@ def steam_callback(request: Request):
             "https://steamcommunity.com/openid/login",
             data=verify_params, timeout=10
         )
-        if "is_valid:true" not in resp.text:
+        if not any(
+            line.strip() == "is_valid:true"
+            for line in resp.text.splitlines()
+        ):
             return _steam_callback_error(
                 "identity_failed", 400, language, operation_id=operation_id
             )
@@ -405,13 +505,24 @@ def steam_callback(request: Request):
 
     # 注册或复用已有图片，并关联到当前模板的 Steam 分组
     try:
-        mgr, sid = _ensure_steam_group(steamid)
-        registered = mgr.register_remote_images(
-            games,
-            steam_id=steamid,
-            group_id=sid,
-            replace_group=True,
-        )
+        with _account_operation_lock("steam", steamid):
+            if str(steamid) not in SteamInformation.get_accounts():
+                raise AccountNotFoundError(
+                    "Steam 账号绑定已被取消，请重新绑定",
+                    code="steam_account_not_found",
+                )
+            mgr = get_manager()
+            target_template = mgr.get_template(target_template_id)
+            sid = "steam_import_" + str(steamid)
+            group_name = _steam_group_name(steamid)
+            registered = mgr.register_remote_images(
+                games,
+                steam_id=steamid,
+                group_id=sid,
+                replace_group=True,
+                template_id=target_template.id,
+                group_name=group_name,
+            )
     except AppError as exc:
         return _steam_callback_app_error(exc, language, operation_id)
     except Exception:
@@ -423,6 +534,7 @@ def steam_callback(request: Request):
 
     _set_steam_import_job(
         operation_id,
+        create=False,
         status="complete",
         steamid=steamid,
         total=registered,
@@ -454,7 +566,7 @@ def steam_callback(request: Request):
         '<script>\n'
         '(function() {\n'
         '    if (window.opener && !window.opener.closed) {\n'
-        f'        window.opener.postMessage({completion_payload}, "*");\n'
+        f'        window.opener.postMessage({completion_payload}, window.location.origin);\n'
         '    }\n'
         '    setTimeout(function() { window.close(); }, 3000);\n'
         '})();\n'
@@ -468,39 +580,53 @@ def steam_callback(request: Request):
 # === Steam 账号管理 ===
 
 @router.get("/steam/accounts")
-async def list_steam_accounts():
+def list_steam_accounts():
     accounts = SteamInformation.get_accounts()
     return {"accounts": accounts}
 
 
 @router.delete("/steam/accounts/{steamid}")
-async def unbind_steam_account(steamid: str):
-    mgr = get_manager()
-    deleted_images = mgr.delete_images_by_steam_id(steamid)
-    SteamInformation.remove_account(steamid)
-    # 删除对应的分组
-    sid = "steam_import_" + steamid
-    groups = mgr._lib().groups
-    for g in list(groups):
-        if g.id == sid:
-            groups.remove(g)
-            break
-    mgr.save_project()
+def unbind_steam_account(steamid: str):
+    with _account_operation_lock("steam", steamid):
+        mgr = get_manager()
+        sid = "steam_import_" + str(steamid)
+        deleted_images = mgr.delete_account_images(
+            sid,
+            legacy_steam_id=str(steamid),
+            remove_groups=True,
+        )
+        SteamInformation.remove_account(steamid)
     logger.info("取消绑定 Steam 账号: %s, 删除了 %d 张图片及分组", steamid, deleted_images)
     return {"ok": True, "deleted_images": deleted_images}
 
 
 @router.delete("/steam/accounts/{steamid}/images")
-async def delete_steam_account_images(steamid: str):
-    mgr = get_manager()
-    deleted = mgr.delete_images_by_steam_id(steamid)
+def delete_steam_account_images(steamid: str):
+    with _account_operation_lock("steam", steamid):
+        mgr = get_manager()
+        deleted = mgr.delete_account_images(
+            "steam_import_" + str(steamid),
+            legacy_steam_id=str(steamid),
+        )
     logger.info("删除 Steam 账号图片: %s, 共 %d 张", steamid, deleted)
     return {"ok": True, "deleted_images": deleted}
 
 
 @router.post("/steam/accounts/{steamid}/sync")
-async def sync_steam_account(steamid: str):
+def sync_steam_account(steamid: str, template_id: str | None = None):
     """同步账号游戏库：获取列表 -> 注册或复用图片 -> 关联当前模板分组。"""
+    with _account_operation_lock("steam", steamid):
+        return _sync_steam_account_locked(steamid, template_id)
+
+
+def _sync_steam_account_locked(steamid: str, template_id: str | None = None):
+    mgr = get_manager()
+    target_template_id = mgr.get_template(template_id).id
+    if str(steamid) not in SteamInformation.get_accounts():
+        raise AccountNotFoundError(
+            "未找到该 Steam 账号，请重新绑定",
+            code="steam_account_not_found",
+        )
     games = SteamInformation.get_owned_games(steamid)
 
     if not games:
@@ -509,73 +635,99 @@ async def sync_steam_account(steamid: str):
             code="steam_library_empty",
         )
 
-    mgr, sid = _ensure_steam_group(steamid)
+    sid = "steam_import_" + str(steamid)
     registered = mgr.register_remote_images(
         games,
         steam_id=steamid,
         group_id=sid,
         replace_group=True,
+        template_id=target_template_id,
+        group_name=_steam_group_name(steamid),
     )
     logger.info("同步账号 %s: 识别 %d 款游戏封面", steamid, registered)
     return {"ok": True, "total": registered}
 
 
 @router.post("/steam/backfill")
-async def backfill_steam_images():
+def backfill_steam_images():
     """后台下载远程图片到本地，每次最多处理 20 张，返回剩余数量"""
+    return _backfill_images_for_source("steam")
+
+
+@router.post("/images/backfill")
+def backfill_platform_images(source: str = ""):
+    """按平台回填远程封面；空 source 兼容为全部平台。"""
+    if source not in {"", "steam", "psn", "xbox"}:
+        raise InvalidInputError(
+            "图片回填来源不正确",
+            code="backfill_source_invalid",
+        )
+    return _backfill_images_for_source(source)
+
+
+def _backfill_images_for_source(source: str):
     mgr = get_manager()
-    ok, fail = mgr.backfill_remote_images(limit=20)
-    remaining = 0
-    for m in mgr.project_data.shared_images_meta.values():
-        if m.is_remote and not m.remote_failed:
-            remaining += 1
-    return {"ok": ok, "fail": fail, "remaining": remaining}
+    ok, fail, deferred = mgr.backfill_remote_images(limit=20, source=source)
+    remaining, retry_pending = mgr.get_backfill_status(source)
+    return {
+        "ok": ok,
+        "fail": fail,
+        "deferred": deferred,
+        "remaining": remaining,
+        "retry_pending": retry_pending,
+    }
 
 
 # === 内部辅助 ===
 
-def _ensure_steam_group(steamid):
+def _steam_group_name(steamid: str) -> str:
+    """返回 Steam 账号图片组名称。"""
+    accounts = SteamInformation.get_accounts()
+    info = accounts.get(str(steamid), {})
+    return (info.get("personaname") or "").strip() or ("Steam " + str(steamid)[:8])
+
+
+def _ensure_steam_group(steamid, template_id: str | None = None):
     """为指定 steam 账号创建/查找独立分组，分组名使用 Steam 昵称"""
     mgr = get_manager()
     sid = "steam_import_" + str(steamid)
 
-    # 查昵称
-    accounts = SteamInformation.get_accounts()
-    info = accounts.get(str(steamid), {})
-    gname = (info.get("personaname") or "").strip() or ("Steam " + str(steamid)[:8])
+    gname = _steam_group_name(steamid)
+    target = mgr.get_template(template_id)
+    library = target.hidden_preset
 
     found = False
-    for g in mgr._lib().groups:
+    for g in library.groups:
         if g.id == sid:
             g.name = gname  # 名称可能已更新
             found = True
             break
     if not found:
         sg = ImageGroup(id=sid, name=gname, image_ids=[])
-        mgr._lib().groups.append(sg)
-        if mgr.current_template:
-            mgr.current_template.library_group_states[sid] = True
+        library.groups.append(sg)
+        target.library_group_states[sid] = True
         mgr.save_project()
     return mgr, sid
 
 
-def _ensure_psn_group(account_id, online_id):
+def _ensure_psn_group(account_id, online_id, template_id: str | None = None):
     """为指定 PSN 账号创建/查找独立分组，分组名使用 PSN 在线 ID"""
     mgr = get_manager()
     sid = "psn_import_" + str(account_id)
     gname = (online_id or "").strip() or ("PSN " + str(account_id)[:8])
 
+    target = mgr.get_template(template_id)
+    library = target.hidden_preset
     found = False
-    for g in mgr._lib().groups:
+    for g in library.groups:
         if g.id == sid:
             g.name = gname
             found = True
             break
     if not found:
         sg = ImageGroup(id=sid, name=gname, image_ids=[])
-        mgr._lib().groups.append(sg)
-        if mgr.current_template:
-            mgr.current_template.library_group_states[sid] = True
+        library.groups.append(sg)
+        target.library_group_states[sid] = True
         mgr.save_project()
     return sid
 
@@ -583,7 +735,7 @@ def _ensure_psn_group(account_id, online_id):
 # === PSN 设置与账号管理 ===
 
 class PSNSettingsRequest(BaseModel):
-    psn_npsso: str = ""
+    psn_npsso: str | None = None
 
 
 class PSNBindRequest(BaseModel):
@@ -596,16 +748,15 @@ class PSNFilterRequest(BaseModel):
 
 
 @router.put("/psn")
-async def update_psn_settings(req: PSNSettingsRequest):
+def update_psn_settings(req: PSNSettingsRequest):
     """保存 PSN NPSSO"""
-    ConfigHandler.update_config_fields({
-        "psn_npsso": req.psn_npsso.strip(),
-    })
+    if req.psn_npsso is not None:
+        ConfigHandler.update_config_fields({"psn_npsso": req.psn_npsso.strip()})
     return {"ok": True}
 
 
 @router.get("/psn/accounts")
-async def list_psn_accounts():
+def list_psn_accounts():
     """列出已绑定的 PSN 账号"""
     from src.core.playstation.psn_client import PSNClient
     accounts = PSNClient.get_accounts()
@@ -613,49 +764,41 @@ async def list_psn_accounts():
 
 
 @router.delete("/psn/accounts/{account_id}")
-async def unbind_psn_account(account_id: str):
+def unbind_psn_account(account_id: str):
     """取消绑定 PSN 账号，删除对应图片和分组"""
     from src.core.playstation.psn_client import PSNClient
-    mgr = get_manager()
-
-    # 根据 account_id 找分组
-    sid = "psn_import_" + str(account_id)
-    # 收集该分组下的图片并删除
-    group = mgr._lib().find_group_by_id(sid)
-    if group:
-        for img_id in list(group.image_ids):
-            mgr.delete_image_globally(img_id)
-        mgr._lib().groups.remove(group)
-
-    PSNClient.remove_account(account_id)
-    mgr.save_project()
-    logger.info("取消绑定 PSN 账号: %s，已删除对应图片及分组", account_id)
-    return {"ok": True}
+    with _account_operation_lock("psn", account_id):
+        mgr = get_manager()
+        sid = "psn_import_" + str(account_id)
+        deleted = mgr.delete_account_images(sid, remove_groups=True)
+        PSNClient.remove_account(account_id)
+    logger.info("取消绑定 PSN 账号: %s，删除了 %d 张图片及全部模板分组", account_id, deleted)
+    return {"ok": True, "deleted_images": deleted}
 
 
 @router.delete("/psn/accounts/{account_id}/images")
-async def delete_psn_account_images(account_id: str):
+def delete_psn_account_images(account_id: str):
     """删除 PSN 账号下的所有图片（保留账号绑定）"""
-    mgr = get_manager()
-    sid = "psn_import_" + str(account_id)
-    group = mgr._lib().find_group_by_id(sid)
-    count = 0
-    if group:
-        count = len(group.image_ids)
-        for img_id in list(group.image_ids):
-            mgr.delete_image_globally(img_id)
-        group.image_ids.clear()
-    mgr.save_project()
+    with _account_operation_lock("psn", account_id):
+        mgr = get_manager()
+        sid = "psn_import_" + str(account_id)
+        count = mgr.delete_account_images(sid)
     logger.info("删除 PSN 账号图片: account_id=%s, 共 %d 张", account_id, count)
     return {"ok": True, "deleted_images": count}
 
 
 @router.post("/psn/accounts/{account_id}/sync")
-async def sync_psn_account(account_id: str):
+def sync_psn_account(account_id: str, template_id: str | None = None):
     """同步 PSN 账号游戏库：获取列表 → 去重 → 远程注册（不下载）"""
+    with _account_operation_lock("psn", account_id):
+        return _sync_psn_account_locked(account_id, template_id)
+
+
+def _sync_psn_account_locked(account_id: str, template_id: str | None = None):
     from src.core.playstation.psn_client import PSNClient
 
     mgr = get_manager()
+    target_template_id = mgr.get_template(template_id).id
     client = PSNClient()
 
     # 从 psn_config.json 读取该账号的 onlineId
@@ -703,23 +846,27 @@ async def sync_psn_account(account_id: str):
             "cover": {"url": image_url},
         })
 
-    sid = _ensure_psn_group(aid, online_id)
+    sid = "psn_import_" + str(aid)
+    group_name = (online_id or "").strip() or ("PSN " + str(aid)[:8])
     registered = mgr.register_remote_images(
         normalized_titles,
         steam_id="",
         group_id=sid,
         replace_group=True,
+        template_id=target_template_id,
+        group_name=group_name,
     )
     logger.info("PSN 同步账号 %s (%s): 识别 %d 款游戏封面", account_id, online_id, registered)
     return {"ok": True, "total": registered, "account_id": aid}
 
 
 @router.post("/psn/bind")
-async def bind_psn_account(req: PSNBindRequest):
+def bind_psn_account(req: PSNBindRequest, template_id: str | None = None):
     """绑定 PSN 账号：获取游戏列表 → 去重 → 远程注册（不下载）"""
     from src.core.playstation.psn_client import PSNClient
 
     mgr = get_manager()
+    target_template_id = mgr.get_template(template_id).id
     client = PSNClient()
 
     # 读取筛选配置
@@ -757,37 +904,42 @@ async def bind_psn_account(req: PSNBindRequest):
             "cover": {"url": image_url},
         })
 
-    sid = _ensure_psn_group(aid, online_id)
-    registered = mgr.register_remote_images(
-        normalized_titles,
-        steam_id="",
-        group_id=sid,
-        replace_group=True,
-    )
+    sid = "psn_import_" + str(aid)
+    group_name = (online_id or "").strip() or ("PSN " + str(aid)[:8])
+    with _account_operation_lock("psn", str(aid)):
+        if str(aid) not in {
+            str(account_key) for account_key in PSNClient.get_accounts()
+        }:
+            raise AccountNotFoundError(
+                "PSN 账号绑定已被取消，请重新绑定",
+                code="psn_account_not_found",
+            )
+        registered = mgr.register_remote_images(
+            normalized_titles,
+            steam_id="",
+            group_id=sid,
+            replace_group=True,
+            template_id=target_template_id,
+            group_name=group_name,
+        )
     logger.info("PSN 绑定完成: account_id=%s (%s), 识别 %d 款游戏封面", aid, online_id, registered)
     return {"ok": True, "total": registered, "account_id": aid}
 
 
 @router.post("/psn/backfill")
-async def backfill_psn_images():
+def backfill_psn_images():
     """后台下载 PSN 远程图片到本地，每次最多处理 20 张，返回剩余数量"""
-    mgr = get_manager()
-    ok, fail = mgr.backfill_remote_images(limit=20)
-    remaining = 0
-    for m in mgr.project_data.shared_images_meta.values():
-        if m.is_remote and not m.remote_failed:
-            remaining += 1
-    return {"ok": ok, "fail": fail, "remaining": remaining}
+    return _backfill_images_for_source("psn")
 
 
 @router.get("/psn/filters")
-async def get_psn_filters():
+def get_psn_filters():
     """获取 PSN 筛选配置"""
     return ConfigHandler.read_psn_filter_config()
 
 
 @router.put("/psn/filters")
-async def update_psn_filters(req: PSNFilterRequest):
+def update_psn_filters(req: PSNFilterRequest):
     """保存 PSN 筛选配置"""
     ConfigHandler.save_psn_filter_config(
         categories=req.categories,
@@ -803,7 +955,7 @@ class XboxBindRequest(BaseModel):
 
 
 @router.get("/xbox/accounts")
-async def list_xbox_accounts():
+def list_xbox_accounts():
     """列出已绑定的 Xbox 账号"""
     from src.core.xbox.xbox_client import XboxClient
     accounts = XboxClient.get_accounts()
@@ -811,48 +963,46 @@ async def list_xbox_accounts():
 
 
 @router.delete("/xbox/accounts/{xuid}")
-async def unbind_xbox_account(xuid: str):
+def unbind_xbox_account(xuid: str):
     """取消绑定 Xbox 账号，删除对应图片和分组"""
     from src.core.xbox.xbox_client import XboxClient
-    mgr = get_manager()
-
-    sid = "xbox:" + str(xuid)
-    group = mgr._lib().find_group_by_id(sid)
-    if group:
-        for img_id in list(group.image_ids):
-            mgr.delete_image_globally(img_id)
-        mgr._lib().groups.remove(group)
-
-    XboxClient.remove_account(xuid)
-    mgr.save_project()
-    logger.info("取消绑定 Xbox 账号: %s", xuid)
-    return {"ok": True}
+    with _account_operation_lock("xbox", xuid):
+        mgr = get_manager()
+        sid = "xbox:" + str(xuid)
+        deleted = mgr.delete_account_images(sid, remove_groups=True)
+        XboxClient.remove_account(xuid)
+    logger.info("取消绑定 Xbox 账号: %s，删除了 %d 张图片及全部模板分组", xuid, deleted)
+    return {"ok": True, "deleted_images": deleted}
 
 
 @router.delete("/xbox/accounts/{xuid}/images")
-async def delete_xbox_account_images(xuid: str):
+def delete_xbox_account_images(xuid: str):
     """删除 Xbox 账号下的所有图片（保留账号绑定）"""
-    mgr = get_manager()
-    sid = "xbox:" + str(xuid)
-    group = mgr._lib().find_group_by_id(sid)
-    count = 0
-    if group:
-        count = len(group.image_ids)
-        for img_id in list(group.image_ids):
-            mgr.delete_image_globally(img_id)
-        group.image_ids.clear()
-    mgr.save_project()
+    with _account_operation_lock("xbox", xuid):
+        mgr = get_manager()
+        sid = "xbox:" + str(xuid)
+        count = mgr.delete_account_images(sid)
     logger.info("删除 Xbox 账号图片: xuid=%s, 共 %d 张", xuid, count)
     return {"ok": True, "deleted_images": count}
 
 
 @router.post("/xbox/accounts/{xuid}/sync")
-async def sync_xbox_account(xuid: str):
+async def sync_xbox_account(xuid: str, template_id: str | None = None):
     """同步 Xbox 账号游戏库"""
+    operation_lock = _account_operation_lock("xbox", xuid)
+    await run_in_threadpool(operation_lock.acquire)
+    try:
+        return await _sync_xbox_account_locked(xuid, template_id)
+    finally:
+        operation_lock.release()
+
+
+async def _sync_xbox_account_locked(xuid: str, template_id: str | None = None):
     from src.core.xbox.xbox_client import XboxClient
 
     mgr = get_manager()
-    accounts = XboxClient.get_accounts()
+    target_template_id = mgr.get_template(template_id).id
+    accounts = await run_in_threadpool(XboxClient.get_accounts)
     info = accounts.get(xuid, {})
     gamertag = info.get("gamertag", "")
     if not gamertag:
@@ -864,11 +1014,13 @@ async def sync_xbox_account(xuid: str):
     client = XboxClient()
     result = await client.get_xbox_games(gamertag)
 
-    return _register_xbox_titles(result, mgr)
+    return await run_in_threadpool(
+        _register_xbox_titles, result, mgr, target_template_id
+    )
 
 
 @router.post("/xbox/bind")
-async def bind_xbox_account(req: XboxBindRequest):
+async def bind_xbox_account(req: XboxBindRequest, template_id: str | None = None):
     """绑定 Xbox 账号"""
     from src.core.xbox.xbox_client import XboxClient
 
@@ -879,13 +1031,27 @@ async def bind_xbox_account(req: XboxBindRequest):
         )
 
     mgr = get_manager()
+    target_template_id = mgr.get_template(template_id).id
     client = XboxClient()
     result = await client.get_xbox_games(req.gamertag.strip())
+    xuid = str(result.get("xuid", ""))
+    operation_lock = _account_operation_lock("xbox", xuid)
+    await run_in_threadpool(operation_lock.acquire)
+    try:
+        accounts = await run_in_threadpool(XboxClient.get_accounts)
+        if xuid not in {str(account_key) for account_key in accounts}:
+            raise AccountNotFoundError(
+                "Xbox 账号绑定已被取消，请重新绑定",
+                code="xbox_account_not_found",
+            )
+        return await run_in_threadpool(
+            _register_xbox_titles, result, mgr, target_template_id
+        )
+    finally:
+        operation_lock.release()
 
-    return _register_xbox_titles(result, mgr)
 
-
-def _register_xbox_titles(result, mgr):
+def _register_xbox_titles(result, mgr, template_id: str | None = None):
     """注册 Xbox 游戏到图片库（共享逻辑）"""
     titles = result.get("titles", [])
     if not titles:
@@ -906,34 +1072,38 @@ def _register_xbox_titles(result, mgr):
             "cover": {"url": t.get("imageUrl", "")},
         })
 
-    sid = _ensure_xbox_group(xuid, gamertag)
+    sid = "xbox:" + str(xuid)
+    group_name = gamertag.strip() or ("Xbox " + str(xuid)[:8])
     registered = mgr.register_remote_images(
         normalized,
         steam_id="",
         group_id=sid,
         replace_group=True,
+        template_id=template_id,
+        group_name=group_name,
     )
     logger.info("Xbox 注册完成: xuid=%s (%s), 识别 %d 款游戏封面", xuid, gamertag, registered)
     return {"ok": True, "total": registered, "xuid": xuid, "gamertag": gamertag}
 
 
-def _ensure_xbox_group(xuid, gamertag):
+def _ensure_xbox_group(xuid, gamertag, template_id: str | None = None):
     """为指定 Xbox 账号创建/查找独立分组"""
     mgr = get_manager()
     sid = "xbox:" + str(xuid)
     gname = gamertag.strip() or ("Xbox " + str(xuid)[:8])
 
+    target = mgr.get_template(template_id)
+    library = target.hidden_preset
     found = False
-    for g in mgr._lib().groups:
+    for g in library.groups:
         if g.id == sid:
             g.name = gname
             found = True
             break
     if not found:
         sg = ImageGroup(id=sid, name=gname, image_ids=[])
-        mgr._lib().groups.append(sg)
-        if mgr.current_template:
-            mgr.current_template.library_group_states[sid] = True
+        library.groups.append(sg)
+        target.library_group_states[sid] = True
         mgr.save_project()
     return sid
 
@@ -943,7 +1113,7 @@ class ClearSourceRequest(BaseModel):
 
 
 @router.post("/clear_cache")
-async def clear_cache(req: ClearSourceRequest):
+def clear_cache(req: ClearSourceRequest):
     """按来源清空缓存：传 source 清单个，不传则清全部"""
     mgr = get_manager()
     if req.source:
@@ -956,7 +1126,7 @@ async def clear_cache(req: ClearSourceRequest):
 
 
 @router.post("/reset_all_images")
-async def reset_all_images():
+def reset_all_images():
     """清除所有图片：库图片、隐藏预设、源缓存、缩略图 —— 恢复到初始分发状态"""
     mgr = get_manager()
     count = mgr.reset_all_images()
@@ -965,7 +1135,7 @@ async def reset_all_images():
 
 
 @router.get("/cache_sources")
-async def list_cache_sources():
+def list_cache_sources():
     """列出所有缓存来源及其文件数"""
     import os as _os
     mgr = get_manager()

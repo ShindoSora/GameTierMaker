@@ -1,9 +1,12 @@
 """Security policy for the loopback-only desktop HTTP server."""
 
+import hmac
+import secrets
 from urllib.parse import urlsplit
 
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+SESSION_COOKIE_NAME = "gtm_local_session"
 
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
@@ -34,6 +37,16 @@ def is_allowed_local_origin(origin: str, expected_port: int | None) -> bool:
         return expected_port is not None and origin_port == expected_port
     except (TypeError, ValueError):
         return False
+
+
+def create_local_session_token() -> str:
+    """Create an unguessable token that lives only for this process."""
+    return secrets.token_urlsafe(32)
+
+
+def is_valid_local_session(candidate: str | None, expected: str) -> bool:
+    """Compare a request cookie without exposing the token to application logs."""
+    return bool(candidate) and hmac.compare_digest(candidate, expected)
 
 
 def apply_security_headers(response):

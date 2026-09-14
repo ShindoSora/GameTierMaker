@@ -15,17 +15,17 @@ router = APIRouter()
 
 
 @router.get("")
-async def get_session_logs(after: int = Query(default=0, ge=0)):
+def get_session_logs(after: int = Query(default=0, ge=0)):
     return session_log_handler.snapshot(after)
 
 
 @router.post("/clear")
-async def clear_session_logs():
+def clear_session_logs():
     return session_log_handler.clear_session()
 
 
 @router.post("/clear-file")
-async def clear_log_file():
+def clear_log_file():
     result = clear_persistent_log_file()
     session = session_log_handler.clear_session()
     return {**result, **session}

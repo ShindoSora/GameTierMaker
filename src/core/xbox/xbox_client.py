@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 
@@ -36,7 +37,12 @@ class XboxClient:
 
     async def _get_client(self):
         try:
-            json_str = self.xbox_token.get_xbox_live_token()
+            # Token discovery may launch the xbox authentication helper and
+            # wait for a child process. Keep that blocking work off Uvicorn's
+            # event-loop thread.
+            json_str = await asyncio.to_thread(
+                self.xbox_token.get_xbox_live_token
+            )
         except Exception as exc:
             raise CredentialExpiredError(
                 "Xbox 登录信息无效，请重新完成账号验证",

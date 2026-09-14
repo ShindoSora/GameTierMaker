@@ -15,11 +15,17 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.core.local_security import apply_security_headers, is_allowed_local_origin
+from src.core.local_security import (
+    SESSION_COOKIE_NAME,
+    apply_security_headers,
+    create_local_session_token,
+    is_allowed_local_origin,
+    is_valid_local_session,
+)
 from src.core.runtime_guard import (
     RuntimeDirectoryError,
     SingleInstanceGuard,
@@ -27,6 +33,9 @@ from src.core.runtime_guard import (
     show_error_message,
 )
 from src.api.error_handlers import register_error_handlers
+from src.core.errors import InvalidInputError
+from src.core.export_service import MAX_EXPORT_BYTES
+from src.core.image_security import MAX_UPLOAD_BYTES
 from src.core.live_logs import RedactingFormatter, install_session_log_handler
 from src.core.version import APP_VERSION
 
@@ -122,6 +131,15 @@ logger = logging.getLogger(__name__)
 logger.info("日志文件: %s", log_file)
 logger.info("启动模式: %s", "FROZEN-EXE" if IS_FROZEN else ("DEBUG" if IS_DEBUG else "NORMAL"))
 
+# This process capability is injected only into the uncached root document,
+# exchanged immediately for an HttpOnly same-site cookie, and never put in a
+# URL or log message.
+_LOCAL_SESSION_TOKEN = create_local_session_token()
+_REQUEST_BODY_LIMITS = {
+    "/api/images/upload": (MAX_UPLOAD_BYTES + 1024 * 1024, "upload_too_large", "上传图片不能超过 25 MB"),
+    "/api/exports/tier-list": (MAX_EXPORT_BYTES + 1024 * 1024, "export_too_large", "导出图片文件过大"),
+}
+
 # 第三方库日志级别控制
 logging.getLogger("urllib3").setLevel(logging.INFO)
 logging.getLogger("PIL").setLevel(logging.WARNING)
@@ -162,8 +180,29 @@ app.add_middleware(
 
 @app.middleware("http")
 async def local_request_security(request: Request, call_next):
+    path = request.url.path
+    is_steam_callback = path == "/api/settings/steam/callback"
+    is_public_health_check = path == "/api/health"
+    is_session_bootstrap_api = path == "/api/session/bootstrap"
+    is_protected_api = path == "/api" or path.startswith("/api/")
+
     origin = request.headers.get("origin")
-    if origin and not is_allowed_local_origin(origin, request.url.port):
+    fetch_site = request.headers.get("sec-fetch-site", "")
+    body_limit = _REQUEST_BODY_LIMITS.get(path) if request.method == "POST" else None
+    declared_too_large = False
+    body_limit_exceeded = False
+    if body_limit:
+        try:
+            declared_too_large = int(request.headers.get("content-length", "0")) > body_limit[0]
+        except ValueError:
+            declared_too_large = True
+    if (
+        not is_steam_callback
+        and (
+            (origin and not is_allowed_local_origin(origin, request.url.port))
+            or fetch_site in {"cross-site", "same-site"}
+        )
+    ):
         response = JSONResponse(
             status_code=403,
             content={
@@ -171,10 +210,57 @@ async def local_request_security(request: Request, call_next):
                 "message": "已阻止来自外部页面的请求",
             },
         )
+    elif (
+        is_protected_api
+        and not is_public_health_check
+        and not is_steam_callback
+        and not is_session_bootstrap_api
+        and not is_valid_local_session(
+            request.cookies.get(SESSION_COOKIE_NAME),
+            _LOCAL_SESSION_TOKEN,
+        )
+    ):
+        response = JSONResponse(
+            status_code=403,
+            content={
+                "error": "local_session_required",
+                "message": "本地会话已失效，请刷新应用页面",
+            },
+        )
+    elif body_limit and declared_too_large:
+        response = JSONResponse(
+            status_code=413,
+            content={"error": body_limit[1], "message": body_limit[2]},
+        )
     else:
+        if body_limit:
+            original_receive = request._receive
+            received_bytes = 0
+
+            async def limited_receive():
+                nonlocal received_bytes, body_limit_exceeded
+                message = await original_receive()
+                if message.get("type") == "http.request":
+                    received_bytes += len(message.get("body", b""))
+                    if received_bytes > body_limit[0]:
+                        body_limit_exceeded = True
+                        raise InvalidInputError(
+                            body_limit[2],
+                            code=body_limit[1],
+                        )
+                return message
+
+            request._receive = limited_receive
         response = await call_next(request)
+        if body_limit_exceeded:
+            response = JSONResponse(
+                status_code=413,
+                content={"error": body_limit[1], "message": body_limit[2]},
+            )
 
     apply_security_headers(response)
+    if is_protected_api:
+        response.headers["Cache-Control"] = "no-store"
     if args.debug:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
@@ -184,6 +270,36 @@ async def local_request_security(request: Request, call_next):
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": APP_VERSION, "runtime_mode": RUNTIME_MODE}
+
+
+@app.post("/api/session/bootstrap")
+async def bootstrap_local_session(request: Request):
+    """Exchange the HTML-only capability for an unreadable session cookie."""
+    candidate = request.headers.get("x-gtm-bootstrap")
+    origin = request.headers.get("origin")
+    fetch_site = request.headers.get("sec-fetch-site", "")
+    if (
+        (origin and not is_allowed_local_origin(origin, request.url.port))
+        or fetch_site in {"cross-site", "same-site"}
+        or not is_valid_local_session(candidate, _LOCAL_SESSION_TOKEN)
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "local_session_bootstrap_rejected",
+                "message": "无法建立本地安全会话，请刷新应用页面",
+            },
+        )
+    response = JSONResponse({"ok": True})
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=_LOCAL_SESSION_TOKEN,
+        path="/api",
+        httponly=True,
+        samesite="strict",
+        secure=False,
+    )
+    return response
 
 # API routes
 from src.api.templates import router as templates_router
@@ -233,12 +349,28 @@ async def json_store_error_handler(request: Request, exc: JsonStoreError):
         },
     )
 
-# Static files
-data_dir = str(DATA_DIR)
-app.mount("/data", StaticFiles(directory=data_dir), name="data")
-
+# Static files. Runtime data is intentionally not mounted as a public tree;
+# image access is limited to the validated /api/images endpoints above.
 frontend_dir = str(FRONTEND_DIR)
 if FRONTEND_DIR.exists():
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/index.html", response_class=HTMLResponse, include_in_schema=False)
+    def frontend_index():
+        index_path = FRONTEND_DIR / "index.html"
+        html = index_path.read_text(encoding="utf-8")
+        marker = "__GTM_SESSION_BOOTSTRAP__"
+        if marker not in html:
+            logger.error("前端会话引导标记缺失")
+            return HTMLResponse("Frontend bootstrap is unavailable", status_code=500)
+        return HTMLResponse(
+            html.replace(
+                f'content="{marker}"',
+                f'content="{_LOCAL_SESSION_TOKEN}"',
+                1,
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 else:
     logger.error("前端资源目录不存在: %s", FRONTEND_DIR)

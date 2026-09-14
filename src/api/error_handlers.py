@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def _status_code_for(exc: AppError) -> int:
+    if exc.code in {"upload_too_large", "export_too_large"}:
+        return 413
     if isinstance(exc, InvalidInputError):
         return 400
     if isinstance(exc, (CredentialMissingError, CredentialExpiredError)):

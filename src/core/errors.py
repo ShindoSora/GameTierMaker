@@ -24,6 +24,11 @@ class InvalidInputError(AppError):
     default_message = "输入内容不正确"
 
 
+class ImageImportError(AppError):
+    code = "image_import_failed"
+    default_message = "图片导入失败"
+
+
 class ExportWriteError(AppError):
     code = "export_write_failed"
     default_message = "导出图片无法保存"

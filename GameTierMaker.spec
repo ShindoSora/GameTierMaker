@@ -61,10 +61,3 @@ exe = EXE(
     icon=str(project_root / "ico" / "exe.ico"),
     version=None,
 )
-from shutil import copy2
-
-for license_file in [
-    project_root / "LICENSE",
-    project_root / "xbox-webapi-LICENSE.txt",
-]:
-    copy2(license_file, Path(DISTPATH) / license_file.name)
