@@ -22,31 +22,15 @@ def build_library_payload(mgr, template_id: str | None = None):
             for group in template.hidden_preset.groups
         ]
 
-        top_crop_image_ids = set()
-        for project_template in mgr.project_data.templates:
-            for group_id in ("default_upload", "local_upload"):
-                group = project_template.hidden_preset.find_group_by_id(group_id)
-                if group:
-                    top_crop_image_ids.update(group.image_ids)
-
         images_meta = {}
         for image_id, meta in mgr.project_data.shared_images_meta.items():
             source_group_id = getattr(meta, "source_group_id", "")
-            keep_platform_ratio = (
-                source_group_id.startswith("psn_import_")
-                or source_group_id.startswith("xbox:")
-            )
-            use_top_crop = (
-                bool(meta.steam_id)
-                or image_id in top_crop_image_ids
-                or (not meta.is_remote and not keep_platform_ratio)
-            )
             images_meta[image_id] = {
                 "is_remote": meta.is_remote,
                 "remote_failed": meta.remote_failed,
                 "path": meta.path,
                 "source_group_id": source_group_id,
-                "display_mode": "top_crop" if use_top_crop else "blur_contain",
+                "display_mode": "cover_top",
             }
         return {"groups": groups, "images_meta": images_meta}
 
