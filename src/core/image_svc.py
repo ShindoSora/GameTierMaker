@@ -9,6 +9,18 @@ from typing import Tuple
 from .errors import ImageImportError, InvalidInputError
 from .image_security import validate_image_id
 
+# Shared by cache download/cleanup and cache-to-library validation.
+SOURCE_CACHE_FOLDERS = (
+    "steam",
+    "igdb",
+    "bangumi",
+    "vndb",
+    "steamgriddb",
+    "xbox",
+    "nintendo",
+    "cache",
+)
+
 class ImageService:
     """
     负责图片的物理操作：导入、存储、缩略图生成
@@ -148,7 +160,7 @@ class ImageService:
         data_root = Path(self.data_dir).resolve()
         cache_roots = [
             (data_root / folder).resolve()
-            for folder in ("steam", "igdb", "bangumi", "xbox", "cache")
+            for folder in SOURCE_CACHE_FOLDERS
         ]
         allowed_cache_roots = {
             root for root in cache_roots if root.parent == data_root

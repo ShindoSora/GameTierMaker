@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import requests
+import threading
 
 from .json_store import (
     JsonStoreError,
@@ -18,13 +19,34 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_UI_LANGUAGE = "zh-CN"
 SUPPORTED_UI_LANGUAGES = {"zh-CN", "en-US"}
+DEFAULT_UI_PREFERENCES = {
+    "library_open": True,
+    "library_width": 280,
+    "settings_open": False,
+    "settings_width": 500,
+    "settings_active_section": "search_settings",
+}
+SUPPORTED_UI_SETTINGS_SECTIONS = {
+    "search_settings",
+    "language",
+    "steam_accounts",
+    "psn_accounts",
+    "xbox_accounts",
+    "nintendo_accounts",
+    "download",
+    "storage",
+    "licenses",
+}
 
 class ConfigHandler:
+    _igdb_token_lock = threading.Lock()
+
     def __init__(self):
         self.xbox_live_token = None
         self.psn_online_id = None
         self.psn_npssoo = None
         self.steam_key = None
+        self.steamgriddb_api_key = None
         self.client_id = None
         self.client_secret = None
         self.expiration_time = None
@@ -33,22 +55,22 @@ class ConfigHandler:
         logger.debug("配置文件路径: %s", self.config_path)
 
     def get_token(self):
-        data = read_json_with_backup(
-            self.config_path,
-            validator=validate_json_object,
-            default={},
-            use_default_when_missing=True,
-        )
-        self.client_id = self.deep_get(data, "client_id")
-        self.client_secret = self.deep_get(data, "client_secret")
-        self.expiration_time = int(self.deep_get(data, "expiration_time") or 0)
-        token = self.deep_get(data, "access_token")
-        now_time = int(time.time())
+        with self._igdb_token_lock:
+            data = read_json_with_backup(
+                self.config_path,
+                validator=validate_json_object,
+                default={},
+                use_default_when_missing=True,
+            )
+            self.client_id = self.deep_get(data, "client_id")
+            self.client_secret = self.deep_get(data, "client_secret")
+            self.expiration_time = int(self.deep_get(data, "expiration_time") or 0)
+            token = self.deep_get(data, "access_token")
+            now_time = int(time.time())
 
-        if self.expiration_time == 0 or now_time > self.expiration_time:
-            return self.get_access_token()
-        else:
-            return True,self.client_id,token
+            if self.expiration_time == 0 or now_time > self.expiration_time:
+                return self.get_access_token()
+            return True, self.client_id, token
 
     def get_access_token(self):
         url = "https://id.twitch.tv/oauth2/token"
@@ -58,7 +80,7 @@ class ConfigHandler:
             "grant_type": "client_credentials",
         }
         try:
-            response = requests.post(url, params=query_params)
+            response = requests.post(url, params=query_params, timeout=(3, 8))
             if response.status_code == 200:
                 data = response.json()
                 new_token = data.get("access_token")
@@ -105,6 +127,16 @@ class ConfigHandler:
         )
         self.steam_key = self.deep_get(data, "steam_key") or ""
         return self.steam_key
+
+    def get_steamgriddb_api_key(self):
+        data = read_json_with_backup(
+            self.config_path,
+            validator=validate_json_object,
+            default={},
+            use_default_when_missing=True,
+        )
+        self.steamgriddb_api_key = self.deep_get(data, "steamgriddb_api_key") or ""
+        return self.steamgriddb_api_key
         
     def get_psn_npsso(self):
         data = read_json_with_backup(
@@ -175,6 +207,21 @@ class ConfigHandler:
         return os.path.join(ConfigHandler._get_root_dir(), "config", "xbox_config.json")
 
     @staticmethod
+    def get_nintendo_accounts_path():
+        """获取 Nintendo 非敏感账号资料路径。"""
+        return os.path.join(ConfigHandler._get_root_dir(), "config", "nintendo_accounts.json")
+
+    @staticmethod
+    def get_nintendo_credentials_path():
+        """获取 Nintendo DPAPI 密文路径。"""
+        return os.path.join(ConfigHandler._get_root_dir(), "config", "nintendo_credentials.json")
+
+    @staticmethod
+    def get_nintendo_records_dir():
+        """获取 Nintendo 游玩记录目录。"""
+        return os.path.join(ConfigHandler._get_root_dir(), "data", "nintendo_records")
+
+    @staticmethod
     def read_psn_filter_config():
         """读取 PSN 筛选配置，文件不存在时返回默认值"""
         path = ConfigHandler.get_psn_filter_config_path()
@@ -238,6 +285,53 @@ class ConfigHandler:
             default={},
             validator=validate_json_object,
         )
+
+    @staticmethod
+    def normalize_ui_preferences(preferences: dict | None) -> dict:
+        """Normalize UI layout preferences shared by browser and desktop WebView."""
+        raw = preferences if isinstance(preferences, dict) else {}
+
+        def bounded_int(name: str, minimum: int, maximum: int) -> int:
+            value = raw.get(name, DEFAULT_UI_PREFERENCES[name])
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                value = DEFAULT_UI_PREFERENCES[name]
+            return max(minimum, min(maximum, value))
+
+        section = raw.get(
+            "settings_active_section",
+            DEFAULT_UI_PREFERENCES["settings_active_section"],
+        )
+        if section not in SUPPORTED_UI_SETTINGS_SECTIONS:
+            section = DEFAULT_UI_PREFERENCES["settings_active_section"]
+
+        return {
+            "library_open": raw.get("library_open", DEFAULT_UI_PREFERENCES["library_open"])
+            if isinstance(raw.get("library_open", DEFAULT_UI_PREFERENCES["library_open"]), bool)
+            else DEFAULT_UI_PREFERENCES["library_open"],
+            "library_width": bounded_int("library_width", 180, 600),
+            "settings_open": raw.get("settings_open", DEFAULT_UI_PREFERENCES["settings_open"])
+            if isinstance(raw.get("settings_open", DEFAULT_UI_PREFERENCES["settings_open"]), bool)
+            else DEFAULT_UI_PREFERENCES["settings_open"],
+            "settings_width": bounded_int("settings_width", 320, 900),
+            "settings_active_section": section,
+        }
+
+    @staticmethod
+    def get_ui_preferences() -> dict:
+        """Read persistent UI layout preferences from the stable app config."""
+        config = ConfigHandler.read_config()
+        return ConfigHandler.normalize_ui_preferences(
+            ConfigHandler.deep_get(config, "ui_preferences")
+        )
+
+    @staticmethod
+    def save_ui_preferences(preferences: dict) -> dict:
+        """Atomically save normalized UI layout preferences without replacing config."""
+        normalized = ConfigHandler.normalize_ui_preferences(preferences)
+        ConfigHandler.update_config_fields({"ui_preferences": normalized})
+        return normalized
 
     @staticmethod
     def deep_get(data: dict, key: str):

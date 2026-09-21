@@ -7,12 +7,13 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, List, Optional
+from urllib.parse import urlsplit
 
 from .models import (
     ProjectData, Template, TierRow, ImageLibrary, 
     ImageGroup, TierImage, ProjectEncoder
 )
-from .image_svc import ImageService
+from .image_svc import ImageService, SOURCE_CACHE_FOLDERS
 from .errors import (
     AppError,
     ImageImportError,
@@ -585,27 +586,59 @@ class ProjectManager:
             return ""
 
     def _detect_source(self, url):
-        """根据 URL 判断来源平台"""
-        u = url.lower()
-        if "steamstatic" in u or "steampowered" in u:
+        """根据固定 CDN 主机判断图片来源，避免 URL 字符串误匹配。"""
+        try:
+            host = (urlsplit(str(url)).hostname or "").rstrip(".").lower()
+        except ValueError:
+            host = ""
+
+        def host_matches(*suffixes):
+            return any(host == suffix or host.endswith("." + suffix) for suffix in suffixes)
+
+        if host_matches("steamstatic.com", "steampowered.com", "steamcdn-a.akamaihd.net"):
             return "steam"
-        if "igdb" in u:
+        if host_matches("images.igdb.com"):
             return "igdb"
-        if "bgm.tv" in u or "bangumi" in u:
+        if host_matches("bgm.tv", "bangumi.tv"):
             return "bangumi"
-        if "store-images.s-microsoft.com" in u or "xbox" in u:
+        if host_matches("vndb.org"):
+            return "vndb"
+        if host_matches("steamgriddb.com"):
+            return "steamgriddb"
+        if host_matches("store-images.s-microsoft.com", "store-images.microsoft.com", "assets.xboxservices.com"):
             return "xbox"
+        if host_matches("znej.nintendo.com", "entry.nintendo.co.jp", "ec.nintendo.com"):
+            return "nintendo"
         return "cache"
 
-    def download_image_to_folder(self, url: str, game_name: str, game_id: str) -> str:
-        """下载图片到源缓存目录（自动检测平台）"""
-        source = self._detect_source(url)
-        if source == "cache":
-            source = "cache"
+    def download_image_to_folder(
+        self,
+        url: str,
+        game_name: str,
+        game_id: str,
+        *,
+        source: str = "",
+        asset_id: str = "",
+    ) -> str:
+        """下载图片到源缓存目录；新搜索请求显式传来源和图片资产。"""
+        source = source.strip().lower() if isinstance(source, str) else ""
+        if not source:
+            source = self._detect_source(url)
+        if source not in self._source_folders():
+            raise InvalidInputError(
+                "图片来源不正确",
+                code="image_source_invalid",
+            )
+        # Keep the old game-id cache key for old callers. New providers must
+        # include the asset ID so multiple SGDB grids cannot overwrite each
+        # other. The cache helper hashes separators into a Windows-safe key.
+        file_id = game_id
+        if asset_id:
+            file_id = f"{game_id}:{asset_id}"
         return self.download_to_source_cache(
             url,
             source,
-            game_id,
+            file_id,
             game_name=game_name,
             raise_errors=True,
         )
@@ -649,7 +682,7 @@ class ProjectManager:
     @staticmethod
     def _source_folders():
         """所有图片来源文件夹名"""
-        return ("steam", "igdb", "bangumi", "xbox", "cache")
+        return SOURCE_CACHE_FOLDERS
 
     def reset_all_images(self):
         """清除所有图片数据：库图片、隐藏预设、源缓存、缩略图 —— 恢复初始状态"""
@@ -1826,6 +1859,8 @@ class ProjectManager:
             return source_group_id.startswith("psn_import_")
         if source == "xbox":
             return source_group_id.startswith("xbox:")
+        if source == "nintendo":
+            return source_group_id.startswith("nintendo:")
         return False
 
     def get_backfill_status(self, source: str = "") -> tuple[int, int]:
@@ -1893,7 +1928,11 @@ class ProjectManager:
                 meta = copy.copy(current_meta)
 
             appid = meta.original_name.replace(".jpg", "").replace(".png", "")
-            cache_source = "steam" if meta.steam_id else self._detect_source(meta.path)
+            source_group_id = getattr(meta, "source_group_id", "")
+            if source_group_id.startswith("nintendo:"):
+                cache_source = "nintendo"
+            else:
+                cache_source = "steam" if meta.steam_id else self._detect_source(meta.path)
             source_retryable = False
             fallback_retryable = False
             try:
@@ -1936,6 +1975,13 @@ class ProjectManager:
                 try:
                     local_path = self.image_svc.copy_from_cache(image_id, cache_path)
                 except AppError as exc:
+                    logger.warning(
+                        "源缓存复制到图片库失败: 游戏=%s, cache=%s -> %s (%s)",
+                        (meta.game_name or "").strip() or "未知游戏",
+                        cache_path,
+                        exc.message,
+                        exc.code,
+                    )
                     if self._is_retryable_image_error(exc):
                         source_retryable = True
                     local_path = ""

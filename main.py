@@ -307,6 +307,7 @@ from src.api.images import router as images_router
 from src.api.library import router as library_router
 from src.api.project import router as project_router
 from src.api.settings import router as settings_router
+from src.api.nintendo import router as nintendo_router
 from src.api.logs import router as logs_router
 from src.api.exports import router as exports_router
 from src.core.json_store import JsonStoreError
@@ -317,6 +318,7 @@ app.include_router(images_router, prefix="/api/images", tags=["images"])
 app.include_router(library_router, prefix="/api/library", tags=["library"])
 app.include_router(project_router, prefix="/api/project", tags=["project"])
 app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
+app.include_router(nintendo_router, prefix="/api/settings", tags=["nintendo"])
 app.include_router(logs_router, prefix="/api/logs", tags=["logs"])
 app.include_router(exports_router, prefix="/api/exports", tags=["exports"])
 

@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 from src.api.deps import get_manager, get_image_svc
+from src.core.search import SearchService
 from src.core.errors import ImageImportError, InvalidInputError
 from src.core.image_security import (
     MAX_UPLOAD_BYTES,
@@ -51,6 +52,8 @@ class DownloadRequest(BaseModel):
     game_id: str
     group_id: str | None = None
     steam_id: str = ""          # 关联 Steam 账号，用于去重和账号管理
+    source: str | None = None
+    asset_id: str | None = None
 
 
 class MoveRequest(BaseModel):
@@ -124,15 +127,19 @@ async def upload_image(
 
 @router.post("/search")
 async def search_images(req: SearchRequest):
-    """搜索 IGDB / Bangumi 游戏封面"""
-    if not req.query.strip():
+    """Search all configured cover providers and preserve source metadata."""
+    query = req.query.strip()
+    if not query:
         raise InvalidInputError(
             "请输入游戏名称",
             code="search_query_required",
         )
-    mgr = get_manager()
-    results = await run_in_threadpool(mgr.search_only, req.query)
-    return {"results": results}
+    if len(query) > 200:
+        raise InvalidInputError(
+            "搜索关键词不能超过 200 个字符",
+            code="search_query_too_long",
+        )
+    return await SearchService().search_all(query)
 
 
 @router.post("/download")
@@ -145,6 +152,8 @@ async def download_image(req: DownloadRequest, template_id: str | None = None):
             req.url,
             req.game_name,
             req.game_id,
+            source=req.source or "",
+            asset_id=req.asset_id or "",
         )
         if file_path:
             with mgr.template_scope(template_id):

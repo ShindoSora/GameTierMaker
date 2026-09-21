@@ -256,6 +256,10 @@ class SteamSettingsRequest(BaseModel):
     steam_key: str | None = None
 
 
+class SteamGridDBSettingsRequest(BaseModel):
+    steamgriddb_api_key: str | None = None
+
+
 class SteamJumpRequest(BaseModel):
     game_name: str
 
@@ -266,6 +270,14 @@ class LanguageSettingsRequest(BaseModel):
 
 class DownloadDirectorySettingsRequest(BaseModel):
     directory: str = ""
+
+
+class UiPreferencesRequest(BaseModel):
+    library_open: bool = True
+    library_width: int = 280
+    settings_open: bool = False
+    settings_width: int = 500
+    settings_active_section: str = "search_settings"
 
 
 @router.get("/language")
@@ -283,6 +295,22 @@ def update_ui_language(req: LanguageSettingsRequest):
         )
     ConfigHandler.save_ui_language(language)
     return {"ok": True, "language": language}
+
+
+@router.get("/ui-preferences")
+def get_ui_preferences():
+    return ConfigHandler.get_ui_preferences()
+
+
+@router.put("/ui-preferences")
+def update_ui_preferences(req: UiPreferencesRequest):
+    return ConfigHandler.save_ui_preferences({
+        "library_open": req.library_open,
+        "library_width": req.library_width,
+        "settings_open": req.settings_open,
+        "settings_width": req.settings_width,
+        "settings_active_section": req.settings_active_section,
+    })
 
 
 @router.get("/download")
@@ -317,7 +345,13 @@ def get_settings():
     }
     result["configured_secrets"] = {
         field: bool(ConfigHandler.deep_get(config, field))
-        for field in ("client_secret", "bangumi_token", "steam_key", "psn_npsso")
+        for field in (
+            "client_secret",
+            "bangumi_token",
+            "steam_key",
+            "steamgriddb_api_key",
+            "psn_npsso",
+        )
     }
     return result
 
@@ -331,7 +365,13 @@ def get_open_source_licenses():
 @router.get("/secret/{field_name}")
 def reveal_setting_secret(field_name: str):
     """Return one credential only after an explicit action in the local UI."""
-    allowed = {"client_secret", "bangumi_token", "steam_key", "psn_npsso"}
+    allowed = {
+        "client_secret",
+        "bangumi_token",
+        "steam_key",
+        "steamgriddb_api_key",
+        "psn_npsso",
+    }
     if field_name not in allowed:
         raise InvalidInputError(
             "不支持读取该设置项",
@@ -377,6 +417,15 @@ def update_bangumi_settings(req: BangumiSettingsRequest):
 def update_steam_settings(req: SteamSettingsRequest):
     if req.steam_key is not None:
         ConfigHandler.update_config_fields({"steam_key": req.steam_key.strip()})
+    return {"ok": True}
+
+
+@router.put("/steamgriddb")
+def update_steamgriddb_settings(req: SteamGridDBSettingsRequest):
+    if req.steamgriddb_api_key is not None:
+        ConfigHandler.update_config_fields(
+            {"steamgriddb_api_key": req.steamgriddb_api_key.strip()}
+        )
     return {"ok": True}
 
 
@@ -657,7 +706,7 @@ def backfill_steam_images():
 @router.post("/images/backfill")
 def backfill_platform_images(source: str = ""):
     """按平台回填远程封面；空 source 兼容为全部平台。"""
-    if source not in {"", "steam", "psn", "xbox"}:
+    if source not in {"", "steam", "psn", "xbox", "nintendo"}:
         raise InvalidInputError(
             "图片回填来源不正确",
             code="backfill_source_invalid",
@@ -1109,7 +1158,7 @@ def _ensure_xbox_group(xuid, gamertag, template_id: str | None = None):
 
 
 class ClearSourceRequest(BaseModel):
-    source: str = ""  # steam / igdb / bangumi / xbox / cache，空字符串 = 全部
+    source: str = ""  # steam / igdb / bangumi / vndb / steamgriddb / xbox / nintendo / cache，空字符串 = 全部
 
 
 @router.post("/clear_cache")

@@ -6,9 +6,11 @@ Python 3.13
 
 Game Tier Maker is a locally run tool for creating game Tier Lists.
 
-You can use the search feature to find game covers and other content, or configure authorization credentials for platforms such as Steam, PlayStation Network, and Xbox to retrieve the game libraries associated with those accounts.
+You can use the search feature to find game covers and other content, or configure authorization credentials for platforms such as Steam, PlayStation Network, Xbox, and Nintendo to retrieve the game libraries associated with those accounts.
 
 You can import local images into the application.
+
+Nintendo accounts use play-activity import: open Nintendo sign-in from Settings, then paste the `npf...://auth` callback link from the browser address bar back into the app and choose which games to import. Nintendo's play-history endpoint is undocumented and its data may be delayed; the current integration is subject to real-account verification. See [NINTENDO_IMPORT_DEV.md](aimd/NINTENDO_IMPORT_DEV.md) for the binding flow and development contract.
 
 The application supports creating multiple sorting templates. You can right-click a tier row to change its color and double-click it to rename it.
 
@@ -76,9 +78,9 @@ Third-party services may require API keys, client secrets, login tokens, or othe
 
 ## Third-Party Services
 
-This project may communicate with third-party platforms or data sources such as Steam, PlayStation Network, Xbox, IGDB, and Bangumi. When using these services, you must comply with the applicable terms of service, privacy policies, API usage rules, and regional restrictions of the respective platforms.
+This project may communicate with third-party platforms or data sources such as Steam, PlayStation Network, Xbox, IGDB, Bangumi, VNDB, and SteamGridDB. Interactive searches aggregate the configured sources; SteamGridDB requires an API key in Search Settings, while public VNDB entry searches generally do not require an account. When using these services, you must comply with the applicable terms of service, privacy policies, API usage rules, and regional restrictions of the respective platforms.
 
-This project is not officially affiliated with, authorized by, or endorsed by Valve, Sony, Microsoft, Twitch, IGDB, Bangumi, or any of their affiliates. Third-party APIs, authentication procedures, and response formats may change at any time; therefore, the continued availability of the related integrations is not guaranteed.
+This project is not officially affiliated with, authorized by, or endorsed by Valve, Sony, Microsoft, Twitch, IGDB, Bangumi, VNDB, SteamGridDB, or any of their affiliates. Third-party APIs, authentication procedures, and response formats may change at any time; therefore, the continued availability of the related integrations is not guaranteed.
 
 All rights to game titles, cover images, trademarks, and other third-party content belong to their respective rights holders. Users are responsible for ensuring that their downloading, caching, exporting, and redistribution activities comply with all applicable rules.
 
@@ -90,7 +92,8 @@ All rights to game titles, cover images, trademarks, and other third-party conte
   * [PlayStation-Trophies](https://github.com/andshrew/PlayStation-Trophies/)
   * [PSN-API](https://github.com/achievements-app/psn-api)
 * The Xbox-related features use the [xbox-webapi-python](https://github.com/OpenXbox/xbox-webapi-python) project.
-* Thanks to [Steam](https://store.steampowered.com/), [Bangumi](https://bangumi.tv/), and [IGDB](https://www.igdb.com/) for providing the relevant platform services or data APIs.
+* The Nintendo play-activity feature references [Raycast Switch Game Play History](https://github.com/raycast/extensions/tree/main/extensions/switch-game-play-history) and [nintendo-go](https://github.com/wolveix/nintendo-go) .
+* Thanks to [Steam](https://store.steampowered.com/), [Bangumi](https://bangumi.tv/), [IGDB](https://www.igdb.com/), [VNDB](https://vndb.org/), and [SteamGridDB](https://www.steamgriddb.com/) for providing the relevant platform services or data APIs.
 
 ## License
 
@@ -112,4 +115,4 @@ xbox-webapi
 
 ## Translate
 
-The English version of this README was translated with assistance from ChatGPT
+The English version of this README was translated with assistance from GPT

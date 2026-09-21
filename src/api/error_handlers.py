@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 def _status_code_for(exc: AppError) -> int:
+    if exc.code in {"nintendo_rate_limited"}:
+        return 429
+    if exc.code.startswith("nintendo_store_") or exc.code == "nintendo_credential_store_unavailable":
+        return 500
     if exc.code in {"upload_too_large", "export_too_large"}:
         return 413
     if isinstance(exc, InvalidInputError):

@@ -69,6 +69,14 @@ KNOWN_COVER_HOST_SUFFIXES = (
     "assets.xboxservices.com",
     "image.api.playstation.com",
     "image.api.np.km.playstation.net",
+    "app-api.znej.nintendo.com",
+    "mypage-api.entry.nintendo.co.jp",
+    "ec.nintendo.com",
+    "atum-img-lp1.cdn.nintendo.net",
+    "cdn.steamgriddb.com",
+    "cdn2.steamgriddb.com",
+    "t.vndb.org",
+    "s.vndb.org",
 )
 WINDOWS_RESERVED_STEMS = {
     "CON", "PRN", "AUX", "NUL",

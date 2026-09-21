@@ -9,7 +9,7 @@
 <script src="/vendor/react.production.min.js"></script>
 <script src="/vendor/react-dom.production.min.js"></script>
 <script src="/vendor/babel.min.js"></script>
-<script src="/i18n.js?v=20260914-licenses"></script>
+<script src="/i18n.js?v=20260920-ui-refresh"></script>
 <style>
     :root {
         --right-overlay-width: 0px;
@@ -23,6 +23,8 @@
   --surface-hover: rgba(255,255,255,0.14);
   --border: rgba(255,255,255,0.06);
   --border-strong: rgba(255,255,255,0.12);
+  --divider: rgba(255,255,255,0.20);
+  --divider-strong: rgba(255,255,255,0.30);
   --text-primary: #e8e8ec;
   --text-secondary: #8888a0;
   --accent: #5b9cf5;
@@ -56,6 +58,8 @@
   --surface-hover: rgba(255,255,255,0.95);
   --border: rgba(0,0,0,0.06);
   --border-strong: rgba(0,0,0,0.12);
+  --divider: rgba(20,30,50,0.22);
+  --divider-strong: rgba(20,30,50,0.32);
   --text-primary: #1a1a28;
   --text-secondary: #5a5a72;
   --accent-glow: rgba(91,156,245,0.1);
@@ -92,7 +96,7 @@ body {
 /* Button base */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 14px; border-radius: var(--radius-md);
+  padding: 7px 14px; min-height: 34px; border-radius: var(--radius-md);
   border: 1px solid var(--border); background: var(--surface);
   color: var(--text-primary); font-size: 13px; cursor: pointer;
   transition: all var(--transition-normal); white-space: nowrap;
@@ -110,8 +114,8 @@ body {
 .btn-success:hover { background: rgba(92,219,139,0.2); }
 .btn-icon { background: transparent; border: none; padding: 4px; min-width: 28px; min-height: 28px; border-radius: var(--radius-sm); }
 .btn-icon:hover { background: var(--surface-hover); }
-.btn-sm { padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm); }
-.btn-xs { padding: 2px 6px; font-size: 11px; border-radius: var(--radius-sm); }
+.btn-sm { padding: 5px 11px; min-height: 32px; font-size: 12px; border-radius: var(--radius-sm); }
+.btn-xs { padding: 4px 9px; min-height: 30px; font-size: 12px; border-radius: var(--radius-sm); }
 .group-delete-button { width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0; justify-content: center; }
 .group-delete-button svg { display: block; }
 
@@ -137,7 +141,7 @@ body {
 }
 .tier-row-container:hover {
   border-color: rgba(255,255,255,0.15);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.35), 0 0 40px var(--accent-glow);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.24), 0 0 18px rgba(91,156,245,0.08);
 }
 .tier-row-container.row-dragging {
   opacity: 0.3; transform: scale(0.97);
@@ -156,7 +160,7 @@ body {
   background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 50%);
   pointer-events: none;
 }
-.tier-header:hover { filter: brightness(1.15) saturate(1.3); }
+.tier-header:hover { filter: brightness(1.08) saturate(1.08); }
 
 .tier-row {
   position: relative; z-index: 1;
@@ -202,7 +206,6 @@ body {
   opacity: 0.35; transform: scale(0.92);
   border-color: transparent; box-shadow: none;
 }
-
 /* Insertion indicator bar */
 .insert-indicator {
   width: 4px; min-width: 4px; height: 100px;
@@ -293,6 +296,7 @@ body {
 .toolbar-group .btn.btn-success { background: rgba(92,219,139,0.14); color: var(--success); }
 .toolbar-group .btn.btn-success:hover { background: rgba(92,219,139,0.24); }
 [data-theme="light"] .toolbar-group .btn.btn-success { color: #237a49; }
+.template-action-button { min-width:74px; justify-content:center; white-space:nowrap; }
 .toolbar-group .input { border: none; background: transparent; min-height: 28px; border-radius: var(--radius-sm); }
 .toolbar-group .input:focus { box-shadow: none; }
 .toolbar-group.template-selector-group { overflow: visible; }
@@ -386,6 +390,7 @@ body {
   font-size: 14px; font-weight: 600; color: var(--text-secondary);
   margin-bottom: var(--spacing-sm); padding: 0 4px;
 }
+.unsorted-count { min-width:20px; padding:2px 6px; border-radius:999px; background:var(--surface); color:var(--text-secondary); font-size:11px; font-weight:600; text-align:center; }
 .unsorted-drop-zone {
   display: flex; flex-wrap: wrap; gap: 8px; padding: var(--spacing-md);
   min-height: 80px;
@@ -401,6 +406,9 @@ body {
   border-color: var(--accent) !important;
   box-shadow: inset 0 0 40px var(--accent-glow), 0 0 20px var(--accent-glow);
 }
+.unsorted-empty { width:100%; display:flex; flex-direction:column; align-items:center; gap:4px; padding:18px 20px; color:var(--text-secondary); text-align:center; }
+.unsorted-empty strong { color:var(--text-primary); font-size:13px; font-weight:600; }
+.unsorted-empty span { font-size:12px; }
 
 /* Search results */
 .search-result-card {
@@ -473,9 +481,52 @@ body {
   min-height: 0; flex: 1; display: flex; flex-wrap: wrap; align-content: flex-start;
   gap: 8px; overflow: auto; padding: 14px;
 }
+.library-search-overlay {
+  background: #0a0a1c;
+  transform-origin: center center;
+  animation: librarySearchOpen 0.28s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+[data-theme="light"] .library-search-overlay { background: #f0f2f8; }
+.library-search-overlay.library-search-restoring {
+  animation: librarySearchRestore 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+.library-search-minimized-bar {
+  position: relative; z-index: 30; width: 100%; min-height: 44px;
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  padding: 4px 8px 4px 14px; border: 1px solid var(--border-strong);
+  border-radius: 999px; background: #0a0a1c; color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.32), 0 0 14px var(--accent-glow);
+  animation: librarySearchBarIn 0.36s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+[data-theme="light"] .library-search-minimized-bar { background: #f0f2f8; }
+.library-search-minimized-bar .library-group-overlay-title { font-size: 12px; }
+.library-search-minimized-bar .library-group-overlay-close { margin-left: 0; }
+.library-search-overlay-grid {
+  flex-direction: column; flex-wrap: nowrap; align-content: stretch; gap: 0;
+}
+.library-search-overlay-grid .search-result-tabs { flex-shrink: 0; }
+.library-search-overlay-grid .search-result-status { flex-shrink: 0; }
+.search-result-overlay-cards {
+  min-height: 0; flex: 1; display: flex; flex-wrap: wrap; align-content: flex-start;
+  gap: 8px; overflow: auto; padding-top: 2px;
+}
 @keyframes libraryGroupOpen {
   from { opacity: 0.35; transform: scale(0.18); border-radius: var(--radius-md); }
   to { opacity: 1; transform: scale(1); border-radius: var(--radius-lg); }
+}
+@keyframes librarySearchOpen {
+  from { opacity: 1; transform: scale(0.18); border-radius: var(--radius-md); }
+  to { opacity: 1; transform: scale(1); border-radius: var(--radius-lg); }
+}
+@keyframes librarySearchRestore {
+  0% { transform: scale(0.86, 0.42); border-radius: 999px; }
+  58% { transform: scale(1.02, 1.03); border-radius: var(--radius-lg); }
+  100% { transform: scale(1); border-radius: var(--radius-lg); }
+}
+@keyframes librarySearchBarIn {
+  0% { opacity: 0; transform: scale(0.82, 0.55); border-radius: var(--radius-lg); }
+  60% { opacity: 1; transform: scale(1.02, 1.08); border-radius: 999px; }
+  100% { opacity: 1; transform: scale(1); border-radius: 999px; }
 }
 @keyframes libraryGroupClose {
   from { opacity: 1; transform: scale(1); border-radius: var(--radius-lg); }
@@ -543,11 +594,11 @@ body {
 
 /* Live log sidebar */
 .log-sidebar {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 3600;
+  position: fixed; top: 8px; right: 8px; bottom: 8px; z-index: 3600;
   display: flex; flex-direction: column;
   min-width: 280px; max-width: 100vw;
   background: var(--sidebar-bg); backdrop-filter: blur(30px);
-  border-left: 1px solid var(--border-strong);
+  border: 1px solid var(--border-strong); border-radius:var(--radius-lg); overflow:hidden;
   box-shadow: -10px 0 36px rgba(0,0,0,0.42);
   animation: slideInRight 0.2s cubic-bezier(0.4,0,0.2,1);
 }
@@ -610,17 +661,113 @@ body {
   background: var(--accent-glow); color: var(--text-primary); font-size: 12px;
 }
 .settings-operation .loading-spinner { width: 18px; height: 18px; border-width: 2px; flex-shrink: 0; }
+.settings-panel { border-radius:var(--radius-lg); overflow:hidden; }
+
+/* Settings navigation */
+.settings-columns { display:flex; flex:1; min-width:0; min-height:0; overflow:hidden; }
+.settings-nav {
+  width:132px; flex:0 0 132px; min-width:0; min-height:0;
+  border-right:1px solid var(--border); display:flex; flex-direction:column;
+  gap:4px; padding:8px; overflow-y:auto; overflow-x:hidden;
+  background:rgba(0,0,0,0.1);
+}
+.settings-nav-group { display:flex; flex-direction:column; gap:4px; }
+.settings-nav-group + .settings-nav-group { margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+.settings-nav-group-label {
+  padding:2px 8px 4px; color:var(--text-secondary); font-size:10px; font-weight:700;
+  letter-spacing:0.08em; text-transform:uppercase; opacity:0.8;
+}
+.settings-nav-item {
+  width:100%; min-width:0; min-height:40px; flex:0 0 auto;
+  justify-content:flex-start; align-items:center; padding:9px 10px;
+  border:1px solid transparent; border-radius:var(--radius-md);
+  background:transparent; color:var(--text-secondary); text-align:left;
+  white-space:normal; line-height:1.45; overflow-wrap:anywhere;
+  transform:none !important; box-shadow:none !important;
+}
+.settings-nav-item:hover { background:var(--surface-hover); border-color:var(--border); color:var(--text-primary); }
+.settings-nav-item:active { transform:none !important; }
+.settings-nav-item.active {
+  background:var(--accent-glow); border-color:rgba(91,156,245,0.22);
+  color:var(--text-primary); font-weight:600;
+}
+.settings-nav-item:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.settings-nav-label { min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.settings-content { flex:1; min-width:0; min-height:0; overflow:auto; padding:18px; }
+.settings-section-heading { margin:0 0 18px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+.settings-section-heading h2 { margin:0; color:var(--text-primary); font-size:16px; line-height:1.35; font-weight:700; }
+.settings-section-heading p { margin:5px 0 0; color:var(--text-secondary); font-size:12px; line-height:1.55; }
+.section-divider { height:1px; flex-shrink:0; background:var(--divider); margin:18px 0; }
+.section-divider-strong { height:1px; flex-shrink:0; background:var(--divider-strong); margin:18px 0; }
+.settings-nav { border-right-color:var(--divider-strong); }
+.settings-nav-group + .settings-nav-group { border-top-color:var(--divider); }
+.settings-section-heading { border-bottom-color:var(--divider-strong); }
+.search-results-divider { height:1px; background:var(--divider); margin:10px 0 12px; }
+.search-result-tabs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.search-result-tab { border:1px solid var(--border); background:var(--surface); color:var(--text-secondary); border-radius:var(--radius-sm); padding:5px 9px; cursor:pointer; font-size:11px; line-height:1.2; }
+.search-result-tab:hover { border-color:var(--border-strong); color:var(--text-primary); background:var(--surface-hover); }
+.search-result-tab.active { border-color:var(--accent); color:var(--text-primary); background:var(--accent-glow); }
+.search-result-tab:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.search-result-source { margin-top:3px; color:var(--text-secondary); font-size:10px; }
+.search-result-status { margin:8px 0; color:var(--text-secondary); font-size:11px; line-height:1.45; }
+@media (max-width:460px) {
+  .settings-nav { width:112px; flex-basis:112px; }
+  .settings-nav-item { padding-left:8px; padding-right:8px; }
+}
+
+/* In-app confirmation dialog */
+.confirm-dialog-backdrop {
+  position:fixed; inset:0; z-index:5000; display:flex; align-items:center; justify-content:center;
+  padding:16px; background:rgba(2,2,12,0.58); backdrop-filter:blur(6px);
+}
+.confirm-dialog {
+  width:400px; max-width:calc(100vw - 32px); max-height:calc(100vh - 32px);
+  overflow:auto; padding:24px; border:1px solid var(--border-strong);
+  border-radius:var(--radius-xl); color:var(--text-primary);
+  background:linear-gradient(145deg, rgba(34,34,62,0.88), rgba(12,12,30,0.92));
+  box-shadow:var(--glass-shadow), 0 20px 60px rgba(0,0,0,0.45);
+  animation:confirmDialogIn 0.18s ease-out;
+}
+[data-theme="light"] .confirm-dialog {
+  background:linear-gradient(145deg, rgba(255,255,255,0.92), rgba(238,241,250,0.94));
+}
+.confirm-dialog-message { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:1.6; }
+.confirm-dialog-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-top:20px; }
+.confirm-dialog-actions .btn { min-height:36px; min-width:82px; justify-content:center; }
+.confirm-dialog-actions .btn-danger { background:rgba(240,96,96,0.18); border-color:rgba(240,96,96,0.35); }
+.input-dialog-field { display:block; width:100%; box-sizing:border-box; margin-top:16px; min-height:40px; font-size:15px; }
+@keyframes confirmDialogIn { from { opacity:0; transform:translateY(6px) scale(0.98); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) { .confirm-dialog { animation:none; } }
 
 /* Top toolbar */
 .top-toolbar {
   position: relative; z-index: 100; overflow: visible;
   display: flex; align-items: center; gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 56px; flex-wrap: wrap;
+  padding: 8px var(--spacing-md);
   border-bottom: 1px solid var(--border);
   background: var(--sidebar-bg);
   backdrop-filter: var(--glass-blur);
   flex-shrink: 0;
   box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 2px 12px rgba(0,0,0,0.08);
+}
+.top-toolbar .toolbar-group { padding:4px; gap:3px; }
+.top-toolbar .toolbar-group .input { min-height:32px; }
+.top-toolbar .toolbar-group .btn { min-height:32px; }
+.toolbar-group.toolbar-primary-actions { border-color:rgba(91,156,245,0.2); }
+.toolbar-group.toolbar-primary-actions .btn-success { background:var(--accent); color:#fff; }
+.toolbar-group.toolbar-primary-actions .btn-success:hover { background:var(--accent-hover); }
+.toolbar-caption { padding:0 4px; color:var(--text-secondary); font-size:11px; font-weight:600; white-space:nowrap; }
+@media (max-width:1100px) {
+  .top-toolbar { gap:6px; }
+  .toolbar-caption { display:none; }
+  .toolbar-group.template-selector-group { max-width:calc(100vw - 280px); }
+}
+@media (max-width:760px) {
+  .top-toolbar { align-items:stretch; }
+  .top-toolbar .toolbar-group { flex-wrap:wrap; }
+  .toolbar-spacer { display:none; }
+  .tier-list-area { padding:10px; }
 }
 .toolbar-spacer { flex: 1; }
 
@@ -628,6 +775,22 @@ body {
 .loading-overlay {
   display: flex; align-items: center; justify-content: center;
   height: 100vh; background: var(--bg-page);
+}
+.refresh-overlay {
+  position:fixed; inset:0; z-index:4500;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(2,2,12,0.58); backdrop-filter:blur(6px);
+}
+.refresh-panel {
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+  min-width:260px; padding:28px 36px;
+  border:1px solid var(--border-strong); border-radius:var(--radius-xl);
+  background:linear-gradient(145deg, rgba(34,34,62,0.92), rgba(12,12,30,0.95));
+  box-shadow:var(--glass-shadow), 0 20px 60px rgba(0,0,0,0.45);
+  color:var(--text-primary); font-size:15px; font-weight:600;
+}
+[data-theme="light"] .refresh-panel {
+  background:linear-gradient(145deg, rgba(255,255,255,0.94), rgba(238,241,250,0.96));
 }
 
 /* Steam import progress */
@@ -678,6 +841,78 @@ const { useState, useEffect, useRef } = React;
 const API = '/api';
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const { t, setLocale, getLocale, getErrorMessage } = window.GameTierI18n;
+const REFRESH_NOTICE_STORAGE_KEY = 'game-tier-maker-refreshing';
+const UI_PREFERENCES_STORAGE_KEY = 'game-tier-maker-ui-preferences';
+const UI_PREFERENCES_DEFAULTS = Object.freeze({
+  libraryOpen: true,
+  libraryWidth: 280,
+  settingsOpen: false,
+  settingsWidth: 500,
+  settingsActiveSection: 'search_settings',
+});
+const PERSISTED_SETTINGS_SECTIONS = Object.freeze([
+  'search_settings', 'language', 'steam_accounts', 'psn_accounts', 'xbox_accounts',
+  'nintendo_accounts', 'download', 'storage', 'licenses',
+]);
+
+function normalizeUiPreferences(saved) {
+  const raw = saved && typeof saved === 'object' ? saved : {};
+  const libraryWidth = Number(raw.libraryWidth);
+  const settingsWidth = Number(raw.settingsWidth);
+  return {
+    libraryOpen: typeof raw.libraryOpen === 'boolean'
+      ? raw.libraryOpen
+      : UI_PREFERENCES_DEFAULTS.libraryOpen,
+    libraryWidth: Number.isFinite(libraryWidth)
+      ? Math.min(600, Math.max(180, libraryWidth))
+      : UI_PREFERENCES_DEFAULTS.libraryWidth,
+    settingsOpen: typeof raw.settingsOpen === 'boolean'
+      ? raw.settingsOpen
+      : UI_PREFERENCES_DEFAULTS.settingsOpen,
+    settingsWidth: Number.isFinite(settingsWidth)
+      ? Math.min(900, Math.max(320, settingsWidth))
+      : UI_PREFERENCES_DEFAULTS.settingsWidth,
+    settingsActiveSection: PERSISTED_SETTINGS_SECTIONS.includes(raw.settingsActiveSection)
+      ? raw.settingsActiveSection
+      : UI_PREFERENCES_DEFAULTS.settingsActiveSection,
+  };
+}
+
+function readUiPreferences() {
+  let saved = {};
+  try {
+    const raw = localStorage.getItem(UI_PREFERENCES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === 'object') saved = parsed;
+  } catch (error) {
+    // 使用默认布局，不能因为本地存储不可用阻塞页面加载。
+  }
+  return normalizeUiPreferences(saved);
+}
+
+function writeUiPreferences(preferences) {
+  try {
+    localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+  } catch (error) {
+    // 本地存储不可用时仍保持当前会话内的 UI 行为。
+  }
+}
+
+function hasRefreshNotice() {
+  try {
+    return sessionStorage.getItem(REFRESH_NOTICE_STORAGE_KEY) === 'true';
+  } catch (error) {
+    return false;
+  }
+}
+
+function clearRefreshNotice() {
+  try {
+    sessionStorage.removeItem(REFRESH_NOTICE_STORAGE_KEY);
+  } catch (error) {
+    // sessionStorage 不可用时只清理当前页面状态。
+  }
+}
 
 // The backend injects this one-use capability only into the uncached root
 // document. Exchange it immediately for an HttpOnly cookie, then erase the
@@ -1371,26 +1606,113 @@ function LibraryGroup({ group, images, onOpen, onClose, expandedView = false, cl
   );
 }
 
-function SearchResults({ results, onSelect, onClose }) {
-  if (!results || results.length === 0) return null;
-  return (
-    <div style={{ position:'relative', marginBottom:12 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-        <span style={{fontSize:13, fontWeight:600}}>{t('library.searchResults')}</span>
-        <button className="btn btn-icon btn-sm" onClick={onClose}>✕</button>
+function SearchResults({ data, loading, activeSource, onSourceChange, onSelect, onClose, minimized, onMinimize, onRestore }) {
+  const tabRefs = useRef({});
+  if (!data && !loading) return null;
+  const results = Array.isArray(data) ? data : (data?.results || []);
+  const sourceStates = Array.isArray(data?.sources) ? data.sources : [];
+  const availableSources = sourceStates.filter(source =>
+    source && source.count > 0 && ['ok', 'partial'].includes(source.status)
+  );
+  const tabs = [{source:'all', count:results.length}, ...availableSources.map(source => ({
+    source: source.source,
+    count: source.count,
+  }))];
+  const selectedSource = tabs.some(tab => tab.source === activeSource) ? activeSource : 'all';
+  const visibleResults = selectedSource === 'all'
+    ? results
+    : results.filter(item => item.source === selectedSource);
+  const sourceFailure = sourceStates.some(source =>
+    ['error', 'unconfigured', 'partial'].includes(source.status)
+  );
+  const hasSuccessfulSource = sourceStates.some(source =>
+    ['ok', 'partial'].includes(source.status) && source.count > 0
+  );
+  const allSourcesFailed = sourceStates.length > 0 && !hasSuccessfulSource
+    && sourceStates.every(source => ['error', 'unconfigured'].includes(source.status));
+  const handleTabKeyDown = event => {
+    if (!tabs.length) return;
+    const currentIndex = Math.max(0, tabs.findIndex(tab => tab.source === selectedSource));
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    const nextSource = tabs[nextIndex].source;
+    onSourceChange(nextSource);
+    requestAnimationFrame(() => tabRefs.current[nextSource]?.focus());
+  };
+
+  if (minimized) {
+    return (
+      <div className="library-search-minimized-bar" onClick={e => e.stopPropagation()}>
+        <span className="library-group-overlay-title">{t('library.searchResults')}</span>
+        {!loading && <span className="library-group-overlay-count">({results.length})</span>}
+        <button className="btn btn-icon btn-sm library-search-restore"
+          onClick={onRestore} aria-label={t('search.restore')} title={t('search.restore')}>↗</button>
+        <button className="btn btn-icon btn-sm library-group-overlay-close"
+          onClick={onClose} aria-label={t('actions.close')} title={t('actions.close')}>×</button>
       </div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:8, maxHeight:200, overflow:'auto' }}>
-        {results.map((game, i) => (
-          <div key={i} className="search-result-card" onClick={() => onSelect(game)}>
-            {game.cover?.url ? (
-              <img src={game.cover.url.startsWith('//') ? 'https:' + game.cover.url.replace('t_thumb','t_cover_big') : game.cover.url}
-                style={{ width:108, height:108, objectFit:'cover', objectPosition:'center top', borderRadius:4 }} alt="" />
+    );
+  }
+
+  return (
+    <div className="library-group-overlay library-search-overlay library-search-restoring" onClick={onClose}>
+      <div className="library-group-overlay-header" onClick={e => e.stopPropagation()}>
+        <span className="library-group-overlay-title">{t('library.searchResults')}</span>
+        {!loading && <span className="library-group-overlay-count">({results.length})</span>}
+        <button className="btn btn-icon btn-sm library-search-minimize"
+          onClick={onMinimize} aria-label={t('search.minimize')} title={t('search.minimize')}>−</button>
+        <button className="btn btn-icon btn-sm library-group-overlay-close"
+          onClick={onClose} aria-label={t('actions.close')} title={t('actions.close')}>×</button>
+      </div>
+      <div className="library-group-overlay-grid library-search-overlay-grid"
+        onClick={e => e.stopPropagation()}>
+        {loading ? (
+          <div className="search-result-status">{t('search.loading')}</div>
+        ) : (
+          <>
+            <div className="search-result-tabs" role="tablist" aria-label={t('search.sources')} onKeyDown={handleTabKeyDown}>
+              {tabs.map(tab => (
+                <button
+                  key={tab.source}
+                  type="button"
+                  role="tab"
+                  tabIndex={tab.source === selectedSource ? 0 : -1}
+                  aria-selected={tab.source === selectedSource}
+                  id={`search-tab-${tab.source}`}
+                  aria-controls="search-results-panel"
+                  ref={node => { if (node) tabRefs.current[tab.source] = node; }}
+                  className={`search-result-tab ${tab.source === selectedSource ? 'active' : ''}`}
+                  onClick={() => onSourceChange(tab.source)}>
+                  {tab.source === 'all' ? t('search.all') : t(`sources.${tab.source}`)} {tab.count}
+                </button>
+              ))}
+            </div>
+            <div className="search-results-divider" />
+            {sourceFailure && <div className="search-result-status">{t(allSourcesFailed ? 'search.failed' : 'search.partial')}</div>}
+            {visibleResults.length === 0 ? (
+              <div className="search-result-status">{t(allSourcesFailed ? 'search.failed' : sourceFailure ? 'search.noResultsPartial' : 'search.noResults')}</div>
             ) : (
-              <div style={{ width:108, height:108, background:'var(--bg-tertiary)', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color:'#666', fontSize:11 }}>{t('library.noCover')}</div>
+              <div id="search-results-panel" className="search-result-overlay-cards" role="tabpanel" aria-labelledby={`search-tab-${selectedSource}`}>
+                {visibleResults.map(game => (
+                  <div key={game.result_id || `${game.source}:${game.id}:${game.asset_id || 'cover'}`} className="search-result-card" onClick={() => onSelect(game)}>
+                    {game.cover?.url ? (
+                      <img src={game.cover.url.startsWith('//') ? 'https:' + game.cover.url.replace('t_thumb','t_cover_big') : game.cover.url}
+                        style={{ width:108, height:108, objectFit:'cover', objectPosition:'center top', borderRadius:4 }} alt="" />
+                    ) : (
+                      <div style={{ width:108, height:108, background:'var(--bg-tertiary)', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center', color:'#666', fontSize:11 }}>{t('library.noCover')}</div>
+                    )}
+                    <div style={{ fontSize:11, marginTop:4, textAlign:'center', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{game.name}</div>
+                    <div className="search-result-source">{t(`sources.${game.source || 'cache'}`)}</div>
+                  </div>
+                ))}
+              </div>
             )}
-            <div style={{ fontSize:11, marginTop:4, textAlign:'center', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{game.name}</div>
-          </div>
-        ))}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1671,8 +1993,156 @@ function LogSidebar({
   );
 }
 
+function ConfirmDialog({ request, onResolve }) {
+  const cancelRef = useRef(null);
+  const confirmRef = useRef(null);
+
+  useEffect(() => {
+    if (!request) return undefined;
+    cancelRef.current?.focus();
+    const handleKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onResolve(false);
+      } else if (event.key === 'Tab') {
+        const cancel = cancelRef.current;
+        const confirm = confirmRef.current;
+        if (!cancel || !confirm) return;
+        if (event.shiftKey && document.activeElement === cancel) {
+          event.preventDefault();
+          confirm.focus();
+        } else if (!event.shiftKey && document.activeElement === confirm) {
+          event.preventDefault();
+          cancel.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [request, onResolve]);
+
+  if (!request) return null;
+  const messageId = `confirm-dialog-message-${request.id}`;
+  return ReactDOM.createPortal(
+    <div className="confirm-dialog-backdrop" role="presentation">
+      <div className="confirm-dialog" role="dialog" aria-modal="true"
+        aria-label={t('dialogs.confirmation')} aria-describedby={messageId}
+        onClick={event => event.stopPropagation()}>
+        <p id={messageId} className="confirm-dialog-message">{request.message}</p>
+        <div className="confirm-dialog-actions">
+          <button ref={cancelRef} type="button" className="btn" onClick={() => onResolve(false)}>
+            {t('actions.cancel')}
+          </button>
+          <button ref={confirmRef} type="button" className={`btn ${request.tone === 'danger' ? 'btn-danger' : 'btn-primary'}`}
+            onClick={() => onResolve(true)}>
+            {t('actions.confirm')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function RefreshOverlay() {
+  return (
+    <div className="refresh-overlay" role="status" aria-live="polite">
+      <div className="refresh-panel">
+        <div className="loading-spinner" />
+        <span>{t('common.refreshing')}</span>
+      </div>
+    </div>
+  );
+}
+
+function InputDialog({ request, onResolve }) {
+  const inputRef = useRef(null);
+  const cancelRef = useRef(null);
+  const confirmRef = useRef(null);
+  const valueRef = useRef('');
+  const resolveRef = useRef(onResolve);
+  resolveRef.current = onResolve;
+  const [value, setValue] = useState('');
+
+  useEffect(() => {
+    if (!request) return undefined;
+    const initialValue = request.initialValue ?? '';
+    valueRef.current = initialValue;
+    setValue(initialValue);
+    inputRef.current?.focus();
+    inputRef.current?.select();
+    const handleKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        resolveRef.current(null);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusables = [inputRef.current, cancelRef.current, confirmRef.current].filter(Boolean);
+      if (!focusables.length) return;
+      const activeIndex = focusables.indexOf(document.activeElement);
+      if (activeIndex < 0) {
+        event.preventDefault();
+        focusables[0].focus();
+      } else if (event.shiftKey && activeIndex === 0) {
+        event.preventDefault();
+        focusables[focusables.length - 1].focus();
+      } else if (!event.shiftKey && activeIndex === focusables.length - 1) {
+        event.preventDefault();
+        focusables[0].focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [request]);
+
+  if (!request) return null;
+  const messageId = `input-dialog-message-${request.id}`;
+  const handleChange = event => {
+    valueRef.current = event.target.value;
+    setValue(event.target.value);
+  };
+  const resolveValue = () => resolveRef.current(valueRef.current);
+  return ReactDOM.createPortal(
+    <div className="confirm-dialog-backdrop" role="presentation">
+      <div className="confirm-dialog" role="dialog" aria-modal="true"
+        aria-labelledby={messageId} onClick={event => event.stopPropagation()}>
+        <p id={messageId} className="confirm-dialog-message">{request.message}</p>
+        <input ref={inputRef} type="text" className="input input-dialog-field"
+          aria-labelledby={messageId} value={value} onChange={handleChange} onKeyDown={event => {
+            if (event.key === 'Enter' && !event.isComposing) {
+              event.preventDefault();
+              resolveValue();
+            }
+          }} autoComplete="off" />
+        <div className="confirm-dialog-actions">
+          <button ref={cancelRef} type="button" className="btn" onClick={() => resolveRef.current(null)}>
+            {t('actions.cancel')}
+          </button>
+          <button ref={confirmRef} type="button" className="btn btn-primary" onClick={resolveValue}>
+            {t('actions.confirm')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function SettingsSectionHeading({ title, description }) {
+  return (
+    <div className="settings-section-heading">
+      <h2>{title}</h2>
+      {description && <p>{description}</p>}
+    </div>
+  );
+}
+
 // === Main App ===
 function App() {
+  const uiPreferencesRef = useRef(null);
+  if (!uiPreferencesRef.current) uiPreferencesRef.current = readUiPreferences();
+  const initialUiPreferences = uiPreferencesRef.current;
   const [uiLanguage, setUiLanguage] = useState(getLocale());
   const [languageReady, setLanguageReady] = useState(false);
   const [languageSaving, setLanguageSaving] = useState(false);
@@ -1685,16 +2155,108 @@ function App() {
   const [imagesMeta, setImagesMeta] = useState({});  // {id: {is_remote, path}}
   const [backfill, setBackfill] = useState(null);    // {ok, fail, remaining} | null
   const [searchResults, setSearchResults] = useState(null);
+  const [searchSource, setSearchSource] = useState('all');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchMinimized, setSearchMinimized] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [libraryOpen, setLibraryOpen] = useState(true);
-  const [libraryWidth, setLibraryWidth] = useState(280);
+  const [libraryOpen, setLibraryOpen] = useState(initialUiPreferences.libraryOpen);
+  const [libraryWidth, setLibraryWidth] = useState(initialUiPreferences.libraryWidth);
   const [activeLibraryGroup, setActiveLibraryGroup] = useState(null);
   const [closingLibraryGroup, setClosingLibraryGroup] = useState(false);
   const libraryGroupsRef = useRef(null);
   const [loadingCount, setLoadingCount] = useState(0);
   const loading = loadingCount > 0;
   const setLoading = active => setLoadingCount(count => active ? count + 1 : Math.max(0, count - 1));
+  const [refreshing, setRefreshing] = useState(hasRefreshNotice);
+  const refreshInFlightRef = useRef(false);
+  const [runtimeMode, setRuntimeMode] = useState(() => window.pywebview?.api ? 'desktop' : 'browser');
+  const desktopUiPreferencesLoadedRef = useRef(false);
+  const uiPreferencesSaveTimerRef = useRef(null);
+  const [confirmRequest, setConfirmRequest] = useState(null);
+  const confirmQueueRef = useRef([]);
+  const confirmActiveRef = useRef(null);
+  const confirmSequenceRef = useRef(0);
+  const [inputRequest, setInputRequest] = useState(null);
+  const inputQueueRef = useRef([]);
+  const inputActiveRef = useRef(null);
+  const inputSequenceRef = useRef(0);
+
+  const showNextConfirm = () => {
+    if (confirmActiveRef.current || !confirmQueueRef.current.length) return;
+    const next = confirmQueueRef.current.shift();
+    confirmActiveRef.current = next;
+    setConfirmRequest(next);
+  };
+
+  const confirmDialog = options => new Promise(resolve => {
+    confirmQueueRef.current.push({
+      id: ++confirmSequenceRef.current,
+      message: options.message,
+      tone: options.tone || 'danger',
+      resolve,
+      trigger: document.activeElement,
+    });
+    showNextConfirm();
+  });
+
+  const resolveConfirm = result => {
+    const active = confirmActiveRef.current;
+    if (!active) return;
+    confirmActiveRef.current = null;
+    setConfirmRequest(null);
+    active.resolve(Boolean(result));
+    const trigger = active.trigger;
+    setTimeout(() => {
+      if (trigger && typeof trigger.focus === 'function' && document.contains(trigger)) trigger.focus();
+      showNextConfirm();
+    }, 0);
+  };
+
+  const confirmAction = (message, tone = 'danger') => confirmDialog({message, tone});
+
+  const showNextInput = () => {
+    if (inputActiveRef.current || !inputQueueRef.current.length) return;
+    const next = inputQueueRef.current.shift();
+    inputActiveRef.current = next;
+    setInputRequest(next);
+  };
+
+  const inputDialog = options => new Promise(resolve => {
+    inputQueueRef.current.push({
+      id: ++inputSequenceRef.current,
+      message: options.message,
+      initialValue: options.initialValue || '',
+      resolve,
+      trigger: document.activeElement,
+    });
+    showNextInput();
+  });
+
+  const resolveInput = value => {
+    const active = inputActiveRef.current;
+    if (!active) return;
+    inputActiveRef.current = null;
+    setInputRequest(null);
+    active.resolve(value);
+    const trigger = active.trigger;
+    setTimeout(() => {
+      if (trigger && typeof trigger.focus === 'function' && document.contains(trigger)) trigger.focus();
+      showNextInput();
+    }, 0);
+  };
+
+  useEffect(() => () => {
+    const pending = confirmActiveRef.current;
+    confirmActiveRef.current = null;
+    if (pending) pending.resolve(false);
+    confirmQueueRef.current.splice(0).forEach(item => item.resolve(false));
+    const pendingInput = inputActiveRef.current;
+    inputActiveRef.current = null;
+    if (pendingInput) pendingInput.resolve(null);
+    inputQueueRef.current.splice(0).forEach(item => item.resolve(null));
+  }, []);
   const [templateName, setTemplateName] = useState('');
+  const [renameMode, setRenameMode] = useState(false);
   const [unassignedDragOver, setUnassignedDragOver] = useState(false);
   const [unassignedInsertIdx, setUnassignedInsertIdx] = useState(-1);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
@@ -1710,20 +2272,22 @@ function App() {
   const templateSwitchQueueRef = useRef(Promise.resolve());
   const templateCreateInFlightRef = useRef(false);
   const searchSequenceRef = useRef(0);
+  const searchAbortRef = useRef(null);
 
   // Settings
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(initialUiPreferences.settingsOpen);
   const [igdbClientId, setIgdbClientId] = useState('');
   const [igdbClientSecret, setIgdbClientSecret] = useState('');
   const [bangumiUserAgent, setBangumiUserAgent] = useState('');
   const [bangumiToken, setBangumiToken] = useState('');
   const [steamKey, setSteamKey] = useState('');
-  const [settingsActiveSection, setSettingsActiveSection] = useState('settings');
+  const [steamgriddbApiKey, setSteamgriddbApiKey] = useState('');
+  const [settingsActiveSection, setSettingsActiveSection] = useState(initialUiPreferences.settingsActiveSection);
   const [settingsBaseline, setSettingsBaseline] = useState(null);
   const [openSourceLicenses, setOpenSourceLicenses] = useState([]);
   const [showPresetsModal, setShowPresetsModal] = useState(false);
   const [presetsList, setPresetsList] = useState([]);
-  const [settingsWidth, setSettingsWidth] = useState(500);
+  const [settingsWidth, setSettingsWidth] = useState(initialUiPreferences.settingsWidth);
   const [settingsOperation, setSettingsOperation] = useState(null);
   const [downloadSettings, setDownloadSettings] = useState(null);
   const [downloadDirectory, setDownloadDirectory] = useState('');
@@ -1763,6 +2327,15 @@ function App() {
   const [xboxGamertag, setXboxGamertag] = useState('');
   const [xboxAccounts, setXboxAccounts] = useState({});
 
+  // Nintendo settings
+  const [nintendoAccounts, setNintendoAccounts] = useState({});
+  const [nintendoAuthOperation, setNintendoAuthOperation] = useState(null);
+  const [nintendoAuthorizeUrl, setNintendoAuthorizeUrl] = useState('');
+  const [nintendoCallback, setNintendoCallback] = useState('');
+  const [nintendoPreview, setNintendoPreview] = useState(null);
+  const [nintendoSelected, setNintendoSelected] = useState(new Set());
+  const [nintendoImportRequestId, setNintendoImportRequestId] = useState('');
+
   // 右键菜单（提升到顶层避免被 GlowCard 的 overflow/transform 裁剪）
   const [tierContextMenu, setTierContextMenu] = useState(null);
   useEffect(() => {
@@ -1772,11 +2345,93 @@ function App() {
     return () => document.removeEventListener('click', close);
   }, [tierContextMenu]);
 
+  const getCurrentUiPreferences = () => ({
+    libraryOpen,
+    libraryWidth,
+    settingsOpen: showSettings,
+    settingsWidth,
+    settingsActiveSection,
+  });
+
+  const applyUiPreferences = preferences => {
+    setLibraryOpen(preferences.libraryOpen);
+    setLibraryWidth(preferences.libraryWidth);
+    setShowSettings(preferences.settingsOpen);
+    setSettingsWidth(preferences.settingsWidth);
+    setSettingsActiveSection(preferences.settingsActiveSection);
+  };
+
+  const toServerUiPreferences = preferences => ({
+    library_open: preferences.libraryOpen,
+    library_width: preferences.libraryWidth,
+    settings_open: preferences.settingsOpen,
+    settings_width: preferences.settingsWidth,
+    settings_active_section: preferences.settingsActiveSection,
+  });
+
+  const saveDesktopUiPreferences = async preferences => {
+    if (runtimeMode !== 'desktop' || !desktopUiPreferencesLoadedRef.current) return;
+    try {
+      await fetchAPI('/settings/ui-preferences', {
+        method: 'PUT',
+        body: JSON.stringify(toServerUiPreferences(preferences)),
+      });
+    } catch (error) {
+      // localStorage 仍保留当前会话的回退值，桌面端下次启动再尝试同步。
+    }
+  };
+
+  const loadDesktopUiPreferences = async () => {
+    let detectedMode = window.pywebview?.api ? 'desktop' : 'browser';
+    try {
+      const health = await fetchAPI('/health');
+      detectedMode = health?.runtime_mode === 'desktop' ? 'desktop' : 'browser';
+    } catch (error) {
+      // 保留 pywebview 的本地判断，避免健康检查失败阻塞页面启动。
+    }
+    setRuntimeMode(detectedMode);
+    if (detectedMode !== 'desktop') return null;
+
+    try {
+      const saved = await fetchAPI('/settings/ui-preferences');
+      const preferences = normalizeUiPreferences({
+        libraryOpen: saved?.library_open,
+        libraryWidth: saved?.library_width,
+        settingsOpen: saved?.settings_open,
+        settingsWidth: saved?.settings_width,
+        settingsActiveSection: saved?.settings_active_section,
+      });
+      desktopUiPreferencesLoadedRef.current = true;
+      applyUiPreferences(preferences);
+      writeUiPreferences(preferences);
+      return preferences;
+    } catch (error) {
+      return null;
+    }
+  };
+
   // Apply theme to document
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const preferences = getCurrentUiPreferences();
+    writeUiPreferences(preferences);
+    if (runtimeMode !== 'desktop' || !desktopUiPreferencesLoadedRef.current) return undefined;
+    if (uiPreferencesSaveTimerRef.current) clearTimeout(uiPreferencesSaveTimerRef.current);
+    uiPreferencesSaveTimerRef.current = setTimeout(() => {
+      uiPreferencesSaveTimerRef.current = null;
+      saveDesktopUiPreferences(preferences);
+    }, 200);
+    return () => {
+      if (uiPreferencesSaveTimerRef.current) {
+        clearTimeout(uiPreferencesSaveTimerRef.current);
+        uiPreferencesSaveTimerRef.current = null;
+      }
+    };
+  }, [libraryOpen, libraryWidth, showSettings, settingsWidth, settingsActiveSection, runtimeMode]);
 
   useEffect(() => {
     logOpenRef.current = logOpen;
@@ -1854,7 +2509,26 @@ function App() {
   }, []);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
-  const handleGlobalRefresh = () => window.location.reload();
+  const persistCurrentUiPreferences = () => {
+    const preferences = getCurrentUiPreferences();
+    writeUiPreferences(preferences);
+    return preferences;
+  };
+  const handleGlobalRefresh = () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    const preferences = persistCurrentUiPreferences();
+    if (uiPreferencesSaveTimerRef.current) {
+      clearTimeout(uiPreferencesSaveTimerRef.current);
+      uiPreferencesSaveTimerRef.current = null;
+    }
+    try { sessionStorage.setItem(REFRESH_NOTICE_STORAGE_KEY, 'true'); }
+    catch (error) { /* 页面刷新仍可继续 */ }
+    setRefreshing(true);
+    saveDesktopUiPreferences(preferences).finally(() => {
+      window.setTimeout(() => window.location.reload(), 300);
+    });
+  };
 
   const handleLogResize = event => {
     event.preventDefault();
@@ -1889,7 +2563,7 @@ function App() {
   };
 
   const handleClearLogs = async () => {
-    if (logEntries.length > 0 && !confirm(t('dialogs.clearSessionLogs'))) return;
+    if (logEntries.length > 0 && !await confirmAction(t('dialogs.clearSessionLogs'))) return;
     try {
       await fetchAPI('/logs/clear', { method: 'POST' });
       setLogEntries([]);
@@ -1901,7 +2575,7 @@ function App() {
   };
 
   const handleClearLogFile = async () => {
-    if (!confirm(t('dialogs.clearLogFile'))) return;
+    if (!await confirmAction(t('dialogs.clearLogFile'))) return;
     try {
       await fetchAPI('/logs/clear-file', { method: 'POST' });
       setLogEntries([]);
@@ -1952,8 +2626,31 @@ function App() {
 
   // Initial load
   useEffect(() => {
-    loadLanguage().then(loadData);
-    loadDownloadSettings();
+    let disposed = false;
+    const initialize = async () => {
+      const serverUiPreferences = await loadDesktopUiPreferences();
+      if (disposed) return;
+      await loadLanguage();
+      await loadData();
+      if (disposed) return;
+      const settingsShouldOpen = serverUiPreferences
+        ? serverUiPreferences.settingsOpen
+        : initialUiPreferences.settingsOpen;
+      if (settingsShouldOpen) await handleOpenSettings();
+      else loadDownloadSettings();
+      if (refreshing) {
+        clearRefreshNotice();
+        setRefreshing(false);
+      }
+    };
+    initialize();
+    return () => {
+      disposed = true;
+      if (uiPreferencesSaveTimerRef.current) {
+        clearTimeout(uiPreferencesSaveTimerRef.current);
+        uiPreferencesSaveTimerRef.current = null;
+      }
+    };
   }, []);
 
   // 切换到 Steam / PSN 账号管理 tab 时刷新
@@ -1961,6 +2658,7 @@ function App() {
     if (settingsActiveSection === 'steam_accounts') loadSteamAccounts();
     if (settingsActiveSection === 'psn_accounts') { loadPsnAccounts(); loadPsnFilters(); }
     if (settingsActiveSection === 'xbox_accounts') loadXboxAccounts();
+    if (settingsActiveSection === 'nintendo_accounts') loadNintendoAccounts();
     if (settingsActiveSection === 'download') loadDownloadSettings();
     if (settingsActiveSection === 'licenses') loadOpenSourceLicenses();
   }, [settingsActiveSection]);
@@ -2065,7 +2763,7 @@ function App() {
       setLoading(true);
       const projectStatus = await fetchAPI('/project/status');
       if (projectStatus.status === 'recovery_required') {
-        const resetConfirmed = confirm(t('dialogs.recoveryReset'));
+        const resetConfirmed = await confirmAction(t('dialogs.recoveryReset'));
         if (!resetConfirmed) {
           showToast(t('project.recoveryProtected'), 'error');
           return;
@@ -2119,6 +2817,7 @@ function App() {
 
   const switchTemplate = async (tid) => {
     if (!tid || selectedTemplateRef.current === tid) return;
+    setRenameMode(false);
     selectedTemplateRef.current = tid;
     templateDataSequenceRef.current += 1;
     templateLoadSequenceRef.current += 1;
@@ -2166,8 +2865,9 @@ function App() {
   };
 
   const handleDeleteTemplate = async () => {
-    if (!currentId || !confirm(t('dialogs.deleteTemplate'))) return;
-    await fetchAPI(`/templates/${currentId}`, { method: 'DELETE' });
+    const targetTemplateId = currentId;
+    if (!targetTemplateId || !await confirmAction(t('dialogs.deleteTemplate'))) return;
+    await fetchAPI(`/templates/${targetTemplateId}`, { method: 'DELETE' });
     await loadData();
   };
 
@@ -2175,6 +2875,7 @@ function App() {
     if (!templateName.trim() || !currentId) return;
     await fetchAPI(`/templates/${currentId}/rename`, { method: 'PUT', body: JSON.stringify({ name: templateName.trim() }) });
     await loadData();
+    setRenameMode(false);
   };
 
   const handleAddTier = async () => {
@@ -2212,7 +2913,7 @@ function App() {
   };
 
   const handleDeleteTier = async (tierId) => {
-    if (!confirm(t('dialogs.deleteTier'))) return;
+    if (!await confirmAction(t('dialogs.deleteTier'))) return;
     await fetchAPI(`/templates/current/tiers/${tierId}?template_id=${encodeURIComponent(currentId)}`, { method: 'DELETE' });
     await loadCurrentTemplate(currentId);
   };
@@ -2257,7 +2958,7 @@ function App() {
 
   const handleDeleteImage = async (imageId, isGlobal) => {
     const msg = isGlobal ? t('dialogs.deleteImageGlobally') : t('dialogs.removeImageFromTemplate');
-    if (!confirm(msg)) return;
+    if (!await confirmAction(msg)) return;
     await fetchAPI(`/images/${imageId}?is_global=${isGlobal}&template_id=${encodeURIComponent(currentId)}`, { method: 'DELETE' });
     if (isGlobal) await refreshSelectedTemplate();
     else await loadCurrentTemplate(currentId);
@@ -2267,15 +2968,38 @@ function App() {
     const query = searchQuery.trim();
     if (!query) return;
     const sequence = ++searchSequenceRef.current;
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
     setSearchResults(null);
+    setSearchSource('all');
+    setSearchMinimized(false);
+    setSearchLoading(true);
     try {
-      const res = await fetchAPI('/images/search', { method: 'POST', body: JSON.stringify({ query }) });
-      if (sequence === searchSequenceRef.current) setSearchResults(res.results);
+      const res = await fetchAPI('/images/search', {
+        method: 'POST',
+        body: JSON.stringify({ query }),
+        signal: controller.signal,
+      });
+      if (sequence === searchSequenceRef.current) setSearchResults(res);
     } catch(e) {
-      if (sequence === searchSequenceRef.current) {
+      const aborted = e?.details?.name === 'AbortError';
+      if (!aborted && sequence === searchSequenceRef.current) {
         showToast(getErrorMessage(e, 'errors.searchFailed'), 'error');
       }
+    } finally {
+      if (sequence === searchSequenceRef.current) setSearchLoading(false);
     }
+  };
+
+  const handleCloseSearchResults = () => {
+    searchSequenceRef.current += 1;
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
+    setSearchLoading(false);
+    setSearchResults(null);
+    setSearchSource('all');
+    setSearchMinimized(false);
   };
 
   const handleSelectSearchResult = async (game) => {
@@ -2288,7 +3012,16 @@ function App() {
       downloadingRef.current = true;
       setLoading(true);
       const templateQuery = `?template_id=${encodeURIComponent(operationTemplateId)}`;
-      await fetchAPI(`/images/download${templateQuery}`, { method: 'POST', body: JSON.stringify({ url: coverUrl, game_name: game.name, game_id: String(game.id) }) });
+      await fetchAPI(`/images/download${templateQuery}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          url: coverUrl,
+          game_name: game.name,
+          game_id: String(game.source_game_id || game.id || ''),
+          source: game.source || null,
+          asset_id: String(game.asset_id || 'cover'),
+        }),
+      });
       await loadCurrentTemplate(operationTemplateId);
       showToast(t('library.coverDownloaded'), 'success');
     } catch(e) {
@@ -2382,7 +3115,7 @@ function App() {
   };
 
   const handleDeleteGroup = async (groupId) => {
-    if (!confirm(t('dialogs.deleteGroup'))) return;
+    if (!await confirmAction(t('dialogs.deleteGroup'))) return;
     await fetchAPI(`/library/groups/${groupId}?template_id=${encodeURIComponent(currentId)}`, { method: 'DELETE' });
     if (activeLibraryGroup?.id === groupId) {
       setActiveLibraryGroup(null);
@@ -2450,7 +3183,7 @@ function App() {
   };
 
   const handleCreateGroup = async () => {
-    const name = prompt(t('group.namePrompt'));
+    const name = await inputDialog({message: t('group.namePrompt')});
     if (!name || !name.trim()) return;
     try {
       await fetchAPI(`/library/groups?template_id=${encodeURIComponent(currentId)}`, { method: 'POST', body: JSON.stringify({ name: name.trim() }) });
@@ -2460,7 +3193,7 @@ function App() {
   };
 
   const handleClearGroup = async (groupId) => {
-    if (!confirm(t('dialogs.clearGroup'))) return;
+    if (!await confirmAction(t('dialogs.clearGroup'))) return;
     try {
       await fetchAPI(`/library/groups/${groupId}/images?template_id=${encodeURIComponent(currentId)}`, { method: 'DELETE' });
       await refreshSelectedTemplate();
@@ -2545,6 +3278,7 @@ function App() {
       setBangumiUserAgent(deepGet(cfg, 'bangumi_user_agent') || '');
       setBangumiToken('');
       setSteamKey('');
+      setSteamgriddbApiKey('');
       setPsnNpsso('');
       const configured = cfg.configured_secrets || {};
       setConfiguredSecrets(configured);
@@ -2601,6 +3335,34 @@ function App() {
     } catch(e) { return {ok:false, section:'steam', message:getErrorMessage(e, 'errors.saveFailed')}; }
   };
 
+  const handleSaveSteamGridDB = async () => {
+    try {
+      await fetchAPI('/settings/steamgriddb', {
+        method: 'PUT',
+        body: JSON.stringify({
+          steamgriddb_api_key: secretTouched.steamgriddb_api_key
+            ? steamgriddbApiKey.trim()
+            : null,
+        }),
+      });
+      return {ok:true, section:'steamgriddb', message:t('settings.steamgriddbSaved')};
+    } catch(e) {
+      return {ok:false, section:'steamgriddb', message:getErrorMessage(e, 'errors.saveFailed')};
+    }
+  };
+
+  const handleSaveSteamKeyFromPlatform = async () => {
+    setSettingsOperation({key: 'steam-key-save', labelKey: 'settings.savingSteamKey'});
+    try {
+      const result = await handleSaveSteamKey();
+      showToast(result.message, result.ok ? 'success' : 'error');
+      if (result.ok) {
+        setConfiguredSecrets(previous => ({...previous, steam_key: !!steamKey.trim()}));
+        setSecretTouched(previous => ({...previous, steam_key: false}));
+      }
+    } finally { setSettingsOperation(null); }
+  };
+
   const handleSteamJump = async () => {
     try {
       const res = await fetchAPI(`/settings/steam/jump?template_id=${encodeURIComponent(currentId)}`, { method: 'POST', body: JSON.stringify({ game_name: '' }) });
@@ -2632,7 +3394,7 @@ function App() {
   };
 
   const handleUnbindAccount = async (steamid) => {
-    if (!confirm(t('dialogs.unbindAccount'))) return;
+    if (!await confirmAction(t('dialogs.unbindAccount'))) return;
     try {
       const res = await fetchAPI('/settings/steam/accounts/' + steamid, { method: 'DELETE' });
       showToast(t('account.unboundWithImages', {count: res.deleted_images}), 'success');
@@ -2642,7 +3404,7 @@ function App() {
   };
 
   const handleDeleteAccountImages = async (steamid) => {
-    if (!confirm(t('dialogs.deleteAccountImages'))) return;
+    if (!await confirmAction(t('dialogs.deleteAccountImages'))) return;
     try {
       const res = await fetchAPI('/settings/steam/accounts/' + steamid + '/images', { method: 'DELETE' });
       showToast(t('account.deletedImages', {count: res.deleted_images}), 'success');
@@ -2651,8 +3413,8 @@ function App() {
   };
 
   const handleClearSource = async (source) => {
-    if (source && !confirm(t('dialogs.clearSourceCache', {source: t(`sources.${source}`)}))) return;
-    if (!source && !confirm(t('dialogs.clearAllSourceCaches'))) return;
+    if (source && !await confirmAction(t('dialogs.clearSourceCache', {source: t(`sources.${source}`)}))) return;
+    if (!source && !await confirmAction(t('dialogs.clearAllSourceCaches'))) return;
     try {
       const res = await fetchAPI('/settings/clear_cache', { method: 'POST', body: JSON.stringify({ source }) });
       showToast(t('storage.cacheCleared', {source: t(`sources.${res.source}`), count: res.deleted}), 'success');
@@ -2660,7 +3422,7 @@ function App() {
   };
 
   const handleResetAllImages = async () => {
-    if (!confirm(t('dialogs.resetAllImages'))) return;
+    if (!await confirmAction(t('dialogs.resetAllImages'))) return;
     try {
       setLoading(true);
       const res = await fetchAPI('/settings/reset_all_images', { method: 'POST' });
@@ -2693,6 +3455,18 @@ function App() {
     } catch(e) { return {ok:false, section:'psn', message:getErrorMessage(e, 'errors.saveFailed')}; }
   };
 
+  const handleSavePsnSettingsFromPlatform = async () => {
+    setSettingsOperation({key: 'psn-npsso-save', labelKey: 'settings.savingPsnNpsso'});
+    try {
+      const result = await handleSavePsnSettings();
+      showToast(result.message, result.ok ? 'success' : 'error');
+      if (result.ok) {
+        setConfiguredSecrets(previous => ({...previous, psn_npsso: !!psnNpsso.trim()}));
+        setSecretTouched(previous => ({...previous, psn_npsso: false}));
+      }
+    } finally { setSettingsOperation(null); }
+  };
+
   const handleSaveAllSettings = async () => {
     const baseline = settingsBaseline || {};
     const dirty = {
@@ -2702,14 +3476,13 @@ function App() {
       bangumi: !settingsBaseline
         || bangumiUserAgent.trim() !== String(baseline.bangumiUserAgent || '').trim()
         || !!secretTouched.bangumi_token,
-      steam: !!secretTouched.steam_key,
-      psn: !!secretTouched.psn_npsso,
+      steamgriddb: !settingsBaseline
+        || !!secretTouched.steamgriddb_api_key,
     };
     const tasks = [];
     if (dirty.igdb) tasks.push(handleSaveIgdb);
     if (dirty.bangumi) tasks.push(handleSaveBangumi);
-    if (dirty.steam) tasks.push(handleSaveSteamKey);
-    if (dirty.psn) tasks.push(handleSavePsnSettings);
+    if (dirty.steamgriddb) tasks.push(handleSaveSteamGridDB);
     if (!tasks.length) return;
 
     const results = [];
@@ -2726,6 +3499,8 @@ function App() {
           ? {bangumi_token: !!bangumiToken.trim()} : {}),
         ...(successful.has('steam') && secretTouched.steam_key
           ? {steam_key: !!steamKey.trim()} : {}),
+        ...(successful.has('steamgriddb') && secretTouched.steamgriddb_api_key
+          ? {steamgriddb_api_key: !!steamgriddbApiKey.trim()} : {}),
         ...(successful.has('psn') && secretTouched.psn_npsso
           ? {psn_npsso: !!psnNpsso.trim()} : {}),
       }));
@@ -2738,6 +3513,7 @@ function App() {
         ...previous,
         ...(successful.has('igdb') ? {client_secret:false} : {}),
         ...(successful.has('bangumi') ? {bangumi_token:false} : {}),
+        ...(successful.has('steamgriddb') ? {steamgriddb_api_key:false} : {}),
         ...(successful.has('steam') ? {steam_key:false} : {}),
         ...(successful.has('psn') ? {psn_npsso:false} : {}),
       }));
@@ -2782,7 +3558,7 @@ function App() {
   };
 
   const handlePsnUnbind = async (accountId) => {
-    if (!confirm(t('dialogs.unbindAccount'))) return;
+    if (!await confirmAction(t('dialogs.unbindAccount'))) return;
     try {
       await fetchAPI('/settings/psn/accounts/' + accountId, { method: 'DELETE' });
       showToast(t('account.unbound'), 'success');
@@ -2792,7 +3568,7 @@ function App() {
   };
 
   const handlePsnDeleteImages = async (accountId) => {
-    if (!confirm(t('dialogs.deleteAccountImages'))) return;
+    if (!await confirmAction(t('dialogs.deleteAccountImages'))) return;
     try {
       const res = await fetchAPI('/settings/psn/accounts/' + accountId + '/images', { method: 'DELETE' });
       showToast(t('account.deletedImages', {count: res.deleted_images}), 'success');
@@ -2846,7 +3622,7 @@ function App() {
   };
 
   const handleXboxUnbind = async (xuid) => {
-    if (!confirm(t('dialogs.unbindAccount'))) return;
+    if (!await confirmAction(t('dialogs.unbindAccount'))) return;
     try {
       await fetchAPI('/settings/xbox/accounts/' + xuid, { method: 'DELETE' });
       showToast(t('account.unbound'), 'success');
@@ -2856,9 +3632,111 @@ function App() {
   };
 
   const handleXboxDeleteImages = async (xuid) => {
-    if (!confirm(t('dialogs.deleteAccountImages'))) return;
+    if (!await confirmAction(t('dialogs.deleteAccountImages'))) return;
     try {
       const res = await fetchAPI('/settings/xbox/accounts/' + xuid + '/images', { method: 'DELETE' });
+      showToast(t('account.deletedImages', {count: res.deleted_images}), 'success');
+      await refreshSelectedTemplate();
+    } catch(e) { showToast(getErrorMessage(e, 'errors.deleteFailed'), 'error'); }
+  };
+
+  // === Nintendo Handlers ===
+  const loadNintendoAccounts = async () => {
+    try {
+      const res = await fetchAPI('/settings/nintendo/accounts');
+      setNintendoAccounts(res.accounts || {});
+    } catch(e) { /* ignore */ }
+  };
+
+  const handleNintendoStart = async () => {
+    try {
+      setSettingsOperation({key: 'nintendo-auth', labelKey: 'nintendo.authorizing'});
+      const res = await fetchAPI('/settings/nintendo/auth/start', {
+        method: 'POST',
+        body: JSON.stringify({template_id: currentId}),
+      });
+      setNintendoAuthOperation(res.operation_id || '');
+      setNintendoAuthorizeUrl(res.authorize_url || '');
+      const popup = window.open(res.authorize_url, '_blank');
+      if (!popup) showToast(t('nintendo.popupBlocked'), 'error');
+    } catch(e) {
+      showToast(getErrorMessage(e, 'errors.nintendoAuthFailed'), 'error');
+    } finally { setSettingsOperation(null); }
+  };
+
+  const handleNintendoComplete = async () => {
+    if (!nintendoAuthOperation || !nintendoCallback.trim()) {
+      showToast(t('nintendo.callbackRequired'), 'error'); return;
+    }
+    try {
+      setSettingsOperation({key: 'nintendo-complete', labelKey: 'nintendo.verifying'});
+      await fetchAPI('/settings/nintendo/auth/complete', {
+        method: 'POST',
+        body: JSON.stringify({operation_id: nintendoAuthOperation, callback_url: nintendoCallback.trim()}),
+      });
+      setNintendoCallback('');
+      setNintendoAuthOperation(null);
+      setNintendoAuthorizeUrl('');
+      await loadNintendoAccounts();
+      showToast(t('nintendo.bound'), 'success');
+    } catch(e) {
+      showToast(getErrorMessage(e, 'errors.nintendoAuthFailed'), 'error');
+    } finally { setSettingsOperation(null); }
+  };
+
+  const handleNintendoSync = async (accountId) => {
+    try {
+      setSettingsOperation({key: `nintendo-sync-${accountId}`, labelKey: 'nintendo.syncing'});
+      const res = await fetchAPI(`/settings/nintendo/accounts/${encodeURIComponent(accountId)}/sync?template_id=${encodeURIComponent(currentId)}`, { method: 'POST' });
+      setNintendoPreview(res);
+      setNintendoSelected(new Set((res.titles || []).map(title => title.record_key)));
+      setNintendoImportRequestId('');
+      showToast(t('nintendo.previewReady', {count: res.received || 0}), 'success');
+    } catch(e) {
+      showToast(getErrorMessage(e, 'errors.nintendoSyncFailed'), 'error');
+    } finally { setSettingsOperation(null); }
+  };
+
+  const handleNintendoImport = async () => {
+    if (!nintendoPreview || !nintendoSelected.size) {
+      showToast(t('nintendo.selectRequired'), 'error'); return;
+    }
+    const requestId = nintendoImportRequestId || window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+    if (!nintendoImportRequestId) setNintendoImportRequestId(requestId);
+    try {
+      setSettingsOperation({key: 'nintendo-import', labelKey: 'nintendo.importing'});
+      const res = await fetchAPI(`/settings/nintendo/accounts/${encodeURIComponent(nintendoPreview.account_id)}/import`, {
+        method: 'POST',
+        body: JSON.stringify({
+          preview_id: nintendoPreview.preview_id,
+          record_keys: Array.from(nintendoSelected),
+          request_id: requestId,
+        }),
+      });
+      setNintendoPreview(null);
+      setNintendoSelected(new Set());
+      setNintendoImportRequestId('');
+      await refreshSelectedTemplate();
+      showToast(t('nintendo.imported', {count: res.registered || 0, pending: res.cover_pending || 0}), 'success');
+      runBackfill('nintendo');
+    } catch(e) {
+      showToast(getErrorMessage(e, 'errors.nintendoImportFailed'), 'error');
+    } finally { setSettingsOperation(null); }
+  };
+
+  const handleNintendoUnbind = async (accountId) => {
+    if (!await confirmAction(t('dialogs.nintendoUnbindAccount'))) return;
+    try {
+      await fetchAPI(`/settings/nintendo/accounts/${encodeURIComponent(accountId)}`, { method: 'DELETE' });
+      await loadNintendoAccounts();
+      showToast(t('nintendo.unbound'), 'success');
+    } catch(e) { showToast(getErrorMessage(e, 'errors.unbindFailed'), 'error'); }
+  };
+
+  const handleNintendoDeleteImages = async (accountId) => {
+    if (!await confirmAction(t('dialogs.deleteAccountImages'))) return;
+    try {
+      const res = await fetchAPI(`/settings/nintendo/accounts/${encodeURIComponent(accountId)}/images`, { method: 'DELETE' });
       showToast(t('account.deletedImages', {count: res.deleted_images}), 'success');
       await refreshSelectedTemplate();
     } catch(e) { showToast(getErrorMessage(e, 'errors.deleteFailed'), 'error'); }
@@ -2916,7 +3794,12 @@ function App() {
   };
 
   if (!languageReady || (loading && tiers.length === 0)) {
-    return <div className="loading-overlay"><div className="loading-spinner" /></div>;
+    return <>
+      <div className="loading-overlay"><div className="loading-spinner" /></div>
+      {refreshing && <RefreshOverlay />}
+      <ConfirmDialog request={confirmRequest} onResolve={resolveConfirm} />
+      <InputDialog request={inputRequest} onResolve={resolveInput} />
+    </>;
   }
 
   // 同步/绑定时显示"请稍等"遮罩
@@ -2944,6 +3827,9 @@ function App() {
 
   return (
     <div style={{width:'100%', height:'100vh'}}>
+      <ConfirmDialog request={confirmRequest} onResolve={resolveConfirm} />
+      <InputDialog request={inputRequest} onResolve={resolveInput} />
+      {refreshing && <RefreshOverlay />}
       {loadingMask}
       <div className="app-layout">
       <div className="library-toggle-rail">
@@ -2971,16 +3857,22 @@ function App() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 {t('library.upload')}
               </button>
-              <button className="btn btn-sm" style={{flex:1}} onClick={handleImportPreset}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                {t('actions.importPreset')}
-              </button>
             </div>
             <button className="btn btn-sm library-create-group" style={{flexShrink:0, width:'56px', justifyContent:'center', color:'var(--success)', padding:'4px 0'}} onClick={handleCreateGroup} title={t('library.newGroup')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           </div>
-          <SearchResults results={searchResults} onSelect={handleSelectSearchResult} onClose={() => setSearchResults(null)} />
+          {searchMinimized && (
+            <SearchResults
+              data={searchResults}
+              loading={searchLoading}
+              activeSource={searchSource}
+              onSourceChange={setSearchSource}
+              onSelect={handleSelectSearchResult}
+              onClose={handleCloseSearchResults}
+              minimized
+              onRestore={() => setSearchMinimized(false)} />
+          )}
         </div>
         <div className="library-groups-scroll" ref={libraryGroupsRef}>
           {activeGroupData ? (
@@ -3015,6 +3907,16 @@ function App() {
                 imagesMeta={imagesMeta} />
             ))
           )}
+          {!searchMinimized && (
+            <SearchResults
+              data={searchResults}
+              loading={searchLoading}
+              activeSource={searchSource}
+              onSourceChange={setSearchSource}
+              onSelect={handleSelectSearchResult}
+              onClose={handleCloseSearchResults}
+              onMinimize={() => setSearchMinimized(true)} />
+          )}
         </div>
       </div>
 
@@ -3045,22 +3947,31 @@ function App() {
         {/* Top Bar */}
         <div className="top-toolbar">
           {/* Template group */}
-          <div className="toolbar-group template-selector-group">
+          <div className="toolbar-group template-selector-group toolbar-template-actions">
             <TemplateSelector templates={templates} currentId={currentId} onSelect={switchTemplate} />
             <div className="toolbar-separator" />
-            <button className="btn btn-xs" onClick={handleCreateTemplate} title={t('template.create')} style={{color:'var(--success)'}}>＋</button>
-            <button className="btn btn-xs" onClick={handleDeleteTemplate} title={t('template.delete')} style={{color:'var(--danger)'}}>－</button>
+            <button className="btn btn-xs template-action-button" onClick={handleCreateTemplate} title={t('template.create')} style={{color:'var(--success)'}}>{t('template.add')}</button>
+            <button className="btn btn-xs template-action-button" onClick={handleDeleteTemplate} title={t('template.delete')} style={{color:'var(--danger)'}}>{t('template.remove')}</button>
           </div>
 
           {/* Rename group — also houses add-tier, export, theme */}
-          <div className="toolbar-group">
-            <input className="input" style={{width:110, border:'none', background:'transparent'}} placeholder={t('template.renamePlaceholder')}
-              value={templateName} onChange={e => setTemplateName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleRenameTemplate()} />
-            <button className="btn btn-xs" onClick={handleRenameTemplate}>{t('actions.rename')}</button>
+          <div className="toolbar-group toolbar-primary-actions">
+            <span className="toolbar-caption">{t('template.label')}</span>
+            {renameMode && (
+              <input autoFocus className="input toolbar-template-name" style={{width:130, border:'none', background:'transparent'}} placeholder={t('template.renamePlaceholder')}
+                value={templateName} onChange={e => setTemplateName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleRenameTemplate();
+                  if (e.key === 'Escape') setRenameMode(false);
+                }} />
+            )}
+            <button className="btn btn-xs" onClick={() => renameMode ? handleRenameTemplate() : setRenameMode(true)}>
+              {renameMode ? t('actions.save') : t('actions.rename')}
+            </button>
+            {renameMode && <button className="btn btn-xs btn-icon" onClick={() => setRenameMode(false)} aria-label={t('actions.cancel')} title={t('actions.cancel')}>✕</button>}
             <div className="toolbar-separator" />
             <button className="btn btn-xs btn-primary" onClick={handleAddTier}>{t('tier.add')}</button>
-            <button className="btn btn-xs btn-success" onClick={handleExport} disabled={exporting}>{t('actions.export')}</button>
+            <button className="btn btn-xs btn-primary" onClick={handleExport} disabled={exporting}>{t('actions.export')}</button>
             <button className="btn btn-xs btn-icon" onClick={toggleTheme} title={theme === 'dark' ? t('theme.light') : t('theme.dark')}>
               {theme === 'dark' ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -3153,6 +4064,7 @@ function App() {
             <div className="unsorted-header">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
               {t('unassigned.title')}
+              <span className="unsorted-count">{unassigned.length}</span>
             </div>
             <div className={`unsorted-drop-zone ${unassignedDragOver ? 'drag-over' : ''}`}
               onDragOver={e => {
@@ -3176,8 +4088,9 @@ function App() {
                 handleDropToUnassigned(e, idx);
               }}>
               {unassigned.length === 0 ? (
-                <div style={{width:'100%', textAlign:'center', color:'var(--text-secondary)', fontSize:12, padding:20}}>
-                  {t('unassigned.empty')}
+                <div className="unsorted-empty">
+                  <strong>{t('unassigned.emptyState')}</strong>
+                  <span>{t('unassigned.empty')}</span>
                 </div>
               ) : (
                 (() => {
@@ -3222,11 +4135,11 @@ function App() {
           background:'rgba(0,0,0,0.4)', backdropFilter:'blur(2px)',
           transition:'opacity 0.3s ease'
         }} onClick={() => { if (!settingsOperation) setShowSettings(false); }}>
-          <div style={{
-            position:'absolute', top:0, right:0, bottom:0, width:settingsWidth, maxWidth:'100%',
+          <div className="settings-panel" style={{
+            position:'absolute', top:8, right:8, bottom:8, width:settingsWidth, maxWidth:'calc(100% - 16px)',
             background:'var(--sidebar-bg)', backdropFilter:'blur(30px)',
-            borderLeft:'1px solid var(--border)',
-            display:'flex', flexDirection:'column',
+            border:'1px solid var(--border-strong)',
+            display:'flex', flexDirection:'column', minWidth:0, minHeight:0,
             boxShadow:'-8px 0 32px rgba(0,0,0,0.4)',
             animation:'slideInRight 0.25s cubic-bezier(0.4,0,0.2,1)'
           }} onClick={e => e.stopPropagation()}>
@@ -3250,7 +4163,7 @@ function App() {
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             />
             {/* Header */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', borderBottom:'1px solid var(--divider-strong)', flexShrink:0 }}>
               <span style={{fontSize:16, fontWeight:700}}>{t('settings.title')}</span>
               <div style={{display:'flex', alignItems:'center', gap:6}}>
                 <button className={`btn btn-sm ${logOpen ? 'btn-primary' : ''}`}
@@ -3262,37 +4175,41 @@ function App() {
               </div>
             </div>
             {/* Two-column: left tabs + right content */}
-            <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
+            <div className="settings-columns">
               {/* Left tab column */}
-              <div style={{
-                width:100, flexShrink:0, borderRight:'1px solid var(--border)',
-                display:'flex', flexDirection:'column', padding:'8px 0',
-                background:'rgba(0,0,0,0.1)'
-              }}>
+              <div className="settings-nav">
                 {[
-                  {key:'settings', label:t('settings.tabs.general')},
-                  {key:'steam_accounts', label:'Steam'},
-                  {key:'psn_accounts', label:'PSN'},
-                  {key:'xbox_accounts', label:'Xbox'},
-                  {key:'download', label:t('settings.tabs.download')},
-                  {key:'storage', label:t('settings.tabs.cleanup')},
-                  {key:'licenses', label:t('settings.tabs.licenses')},
-                ].map(tab => (
-                  <button key={tab.key}
-                    className="btn btn-xs"
-                    onClick={() => setSettingsActiveSection(tab.key)}
-                    style={{
-                      border:'none', borderLeft: settingsActiveSection === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
-                      borderRadius:0, background: settingsActiveSection === tab.key ? 'var(--accent-glow)' : 'transparent',
-                      fontWeight: settingsActiveSection === tab.key ? 600 : 400,
-                      color: settingsActiveSection === tab.key ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      padding:'10px 12px', fontSize:12, textAlign:'left', width:'100%',
-                      transition:'all var(--transition-fast)'
-                    }}>{tab.label}</button>
+                  {key:'general', label:t('settings.groups.general'), items:[
+                    {key:'search_settings', label:t('settings.tabs.search')},
+                    {key:'language', label:t('settings.tabs.language')},
+                  ]},
+                  {key:'accounts', label:t('settings.groups.accounts'), items:[
+                    {key:'steam_accounts', label:'Steam'},
+                    {key:'psn_accounts', label:'PSN'},
+                    {key:'xbox_accounts', label:'Xbox'},
+                    {key:'nintendo_accounts', label:'Nintendo'},
+                  ]},
+                  {key:'maintenance', label:t('settings.groups.maintenance'), items:[
+                    {key:'download', label:t('settings.tabs.download')},
+                    {key:'storage', label:t('settings.tabs.cleanup')},
+                    {key:'licenses', label:t('settings.tabs.licenses')},
+                  ]},
+                ].map(group => (
+                  <div key={group.key} className="settings-nav-group">
+                    <div className="settings-nav-group-label">{group.label}</div>
+                    {group.items.map(tab => (
+                      <button key={tab.key}
+                        className={`btn btn-xs settings-nav-item ${settingsActiveSection === tab.key ? 'active' : ''}`}
+                        onClick={() => setSettingsActiveSection(tab.key)}
+                        >
+                        <span className="settings-nav-label">{tab.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </div>
               {/* Right content */}
-              <div style={{ flex:1, overflow:'auto', padding:18 }}>
+              <div className="settings-content">
               {settingsOperation && (
                 <div className="settings-operation">
                   <div className="loading-spinner" />
@@ -3302,13 +4219,19 @@ function App() {
                   </div>
                 </div>
               )}
-              {settingsActiveSection === 'settings' && (
+              {settingsActiveSection === 'language' && (
                 <div>
+                  <SettingsSectionHeading title={t('settings.tabs.language')} />
                   <div style={{marginBottom:20}}>
                     <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:6, color:'var(--text-secondary)'}}>{t('settings.language')}</label>
                     <LanguageSelector value={uiLanguage} onChange={handleLanguageChange} disabled={languageSaving} />
                   </div>
-                  <div style={{height:1, background:'var(--border)', marginBottom:16}}></div>
+                </div>
+              )}
+
+              {settingsActiveSection === 'search_settings' && (
+                <div>
+                  <SettingsSectionHeading title={t('settings.tabs.search')} />
                   {/* IGDB */}
                   <div style={{marginBottom:12}}>
                     <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:4, color:'var(--text-secondary)'}}>IGDB Client ID</label>
@@ -3332,7 +4255,7 @@ function App() {
                       </p>
                   </div>
 
-                  <div style={{height:1, background:'var(--border)', marginBottom:16}}></div>
+                  <div className="section-divider" />
 
                   {/* Bangumi */}
                   <div style={{marginBottom:12}}>
@@ -3359,43 +4282,33 @@ function App() {
                       </div>
                   </div>
 
-                  <div style={{height:1, background:'var(--border)', marginBottom:16}}></div>
+                  <div className="section-divider" />
 
-                  {/* Steam API Key */}
+                  {/* SteamGridDB */}
                   <div style={{marginBottom:16}}>
-                    <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:4, color:'var(--text-secondary)'}}>Steam API Key</label>
-                    <PasswordField value={steamKey}
-                      onChange={e => updateSettingSecret('steam_key', setSteamKey, e.target.value)}
-                      onReveal={() => revealSettingSecret('steam_key', setSteamKey)}
-                      placeholder={t('settings.steamKeyPlaceholder')} />
-                    <p style={{marginTop:4, fontSize:11, color:'var(--text-secondary)'}}>
-                      {t('settings.steamKeyHelpBefore')}{' '}<a href="https://steamcommunity.com/dev/apikey" target="_blank" style={{color:'var(--accent)'}}>{t('settings.steamDeveloperPage')}</a>{t('settings.steamKeyHelpAfter')}
+                    <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:4, color:'var(--text-secondary)'}}>
+                      {t('settings.steamgriddbApiKeyLabel')}
+                    </label>
+                    <PasswordField value={steamgriddbApiKey}
+                      onChange={e => updateSettingSecret('steamgriddb_api_key', setSteamgriddbApiKey, e.target.value)}
+                      onReveal={() => revealSettingSecret('steamgriddb_api_key', setSteamgriddbApiKey)}
+                      placeholder={t('settings.steamgriddbApiKeyPlaceholder')} />
+                    <p style={{marginTop:8, fontSize:11, color:'var(--text-secondary)'}}>
+                      {t('settings.steamgriddbHelpBefore')}{' '}
+                      <a href="https://www.steamgriddb.com/profile/preferences/api" target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)'}}>
+                        {t('settings.steamgriddbApiDocs')}
+                      </a>{' '}{t('settings.steamgriddbHelpAfter')}
+                    </p>
+                    <p style={{marginTop:8, fontSize:11, color:'var(--text-secondary)'}}>
+                      {t('settings.vndbNoKey')}
                     </p>
                   </div>
-                    {/* NPSSO */}
-                    <div style={{marginBottom:12}}>
-                        <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:4, color:'var(--text-secondary)'}}>PSN NPSSO</label>
-                        <PasswordField value={psnNpsso}
-                               onChange={e => updateSettingSecret('psn_npsso', setPsnNpsso, e.target.value)}
-                               onReveal={() => revealSettingSecret('psn_npsso', setPsnNpsso)}
-                               placeholder={t('settings.npssoPlaceholder')} />
-                        <p style={{marginTop:6, fontSize:11, color:'var(--text-secondary)', lineHeight:1.6}}>
-                            {t('settings.npssoHelpStart')}{' '}
-                            <a href="https://store.playstation.com" target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)'}}>
-                                https://store.playstation.com
-                            </a>
-                            {' '}{t('settings.npssoHelpMiddle')}{' '}
-                            <a href="https://ca.account.sony.com/api/v1/ssocookie" target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)'}}>
-                                https://ca.account.sony.com/api/v1/ssocookie
-                            </a>
-                            {' '}{t('settings.npssoHelpEnd')}
-                        </p>
-                    </div>
 
-                    <div style={{height:1, background:'var(--border)', marginBottom:20}}></div>
+                  <div className="section-divider" />
+
                   <button className="btn btn-primary btn-sm" onClick={handleSaveAllSettings} style={{marginBottom:10}}>{t('settings.saveAll')}</button>
 
-                  <div style={{height:1, background:'var(--border)', margin:'16px 0'}}></div>
+                  <div className="section-divider" />
 
 
                 </div>
@@ -3403,6 +4316,21 @@ function App() {
 
               {settingsActiveSection === 'steam_accounts' && (
                 <div>
+                  <SettingsSectionHeading title="Steam" />
+                  <div style={{marginBottom:16}}>
+                    <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:4, color:'var(--text-secondary)'}}>{t('settings.steamApiKeyLabel')}</label>
+                    <PasswordField value={steamKey}
+                      onChange={e => updateSettingSecret('steam_key', setSteamKey, e.target.value)}
+                      onReveal={() => revealSettingSecret('steam_key', setSteamKey)}
+                      placeholder={t('settings.steamKeyPlaceholder')} />
+                    <p style={{marginTop:4, fontSize:11, color:'var(--text-secondary)'}}>
+                      {t('settings.steamKeyHelpBefore')}{' '}<a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)'}}>{t('settings.steamDeveloperPage')}</a>{t('settings.steamKeyHelpAfter')}
+                    </p>
+                    <button className="btn btn-sm btn-primary" onClick={handleSaveSteamKeyFromPlatform} disabled={!!settingsOperation}>
+                      {t('actions.save')}
+                    </button>
+                  </div>
+                  <div style={{height:1, background:'var(--divider)', marginBottom:16}}></div>
                   <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
                     <span style={{fontSize:13, fontWeight:600}}>{t('account.boundAccounts')}</span>
                     <button className="btn btn-xs" onClick={loadSteamAccounts}>{t('actions.refresh')}</button>
@@ -3417,7 +4345,7 @@ function App() {
                         {t('steam.bindAccount')}
                     </button>
 
-                    <div style={{height:1, background:'var(--border)', margin:'16px 0'}}></div>
+                    <div style={{height:1, background:'var(--divider)', margin:'16px 0'}}></div>
 
                   {Object.keys(steamAccounts).length === 0 ? (
                     <p style={{textAlign:'center', color:'var(--text-secondary)', padding:20, fontSize:13}}>
@@ -3442,6 +4370,29 @@ function App() {
 
               {settingsActiveSection === 'psn_accounts' && (
                 <div>
+                  <SettingsSectionHeading title="PSN" />
+                  <div style={{marginBottom:16}}>
+                    <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:4, color:'var(--text-secondary)'}}>{t('settings.psnNpssoLabel')}</label>
+                    <PasswordField value={psnNpsso}
+                      onChange={e => updateSettingSecret('psn_npsso', setPsnNpsso, e.target.value)}
+                      onReveal={() => revealSettingSecret('psn_npsso', setPsnNpsso)}
+                      placeholder={t('settings.npssoPlaceholder')} />
+                    <p style={{marginTop:6, fontSize:11, color:'var(--text-secondary)', lineHeight:1.6}}>
+                      {t('settings.npssoHelpStart')}{' '}
+                      <a href="https://store.playstation.com" target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)'}}>
+                        https://store.playstation.com
+                      </a>
+                      {' '}{t('settings.npssoHelpMiddle')}{' '}
+                      <a href="https://ca.account.sony.com/api/v1/ssocookie" target="_blank" rel="noopener noreferrer" style={{color:'var(--accent)'}}>
+                        https://ca.account.sony.com/api/v1/ssocookie
+                      </a>
+                      {' '}{t('settings.npssoHelpEnd')}
+                    </p>
+                    <button className="btn btn-sm btn-primary" onClick={handleSavePsnSettingsFromPlatform} disabled={!!settingsOperation}>
+                      {t('actions.save')}
+                    </button>
+                  </div>
+                  <div style={{height:1, background:'var(--divider)', marginBottom:20}}></div>
 
 
 
@@ -3492,7 +4443,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div style={{height:1, background:'var(--border)', margin:'16px 0'}}></div>
+                  <div style={{height:1, background:'var(--divider)', margin:'16px 0'}}></div>
 
                   {/* 平台筛选 */}
                   <div style={{marginBottom:12}}>
@@ -3527,7 +4478,7 @@ function App() {
                       placeholder={t('psn.noPlaytimeFilter')} />
                   </div>
 
-                  <div style={{height:1, background:'var(--border)', marginBottom:16}}></div>
+                  <div style={{height:1, background:'var(--divider)', marginBottom:16}}></div>
 
                   <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
                     <span style={{fontSize:13, fontWeight:600}}>{t('account.boundAccounts')}</span>
@@ -3557,6 +4508,7 @@ function App() {
 
               {settingsActiveSection === 'xbox_accounts' && (
                 <div>
+                  <SettingsSectionHeading title="Xbox" />
                   {/* Xbox 玩家代号 + 绑定 */}
                   <div style={{marginBottom:14}}>
                     <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:4, color:'var(--text-secondary)'}}>{t('xbox.gamertag')}</label>
@@ -3569,7 +4521,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div style={{height:1, background:'var(--border)', margin:'16px 0'}}></div>
+                  <div style={{height:1, background:'var(--divider)', margin:'16px 0'}}></div>
 
                   <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
                     <span style={{fontSize:13, fontWeight:600}}>{t('account.boundAccounts')}</span>
@@ -3597,8 +4549,86 @@ function App() {
                 </div>
               )}
 
+              {settingsActiveSection === 'nintendo_accounts' && (
+                <div>
+                  <SettingsSectionHeading title="Nintendo" />
+                  <p style={{margin:'0 0 12px', fontSize:12, color:'var(--text-secondary)', lineHeight:1.7}}>
+                    {t('nintendo.bindHelp')}
+                  </p>
+                  <button className="btn btn-sm btn-primary" onClick={handleNintendoStart} disabled={!!settingsOperation}>
+                    {t('nintendo.openLogin')}
+                  </button>
+
+                  {nintendoAuthOperation && (
+                    <div style={{marginTop:12, padding:12, border:'1px solid var(--border)', borderRadius:'var(--radius-md)', background:'var(--surface)'}}>
+                      <p style={{margin:'0 0 8px', fontSize:11, color:'var(--text-secondary)', lineHeight:1.6}}>{t('nintendo.callbackHelp')}</p>
+                      <input className="input" style={{width:'100%', marginBottom:8, fontSize:11}} value={nintendoAuthorizeUrl} readOnly onFocus={e => e.target.select()} />
+                      <label style={{display:'block', fontSize:12, fontWeight:600, marginBottom:5, color:'var(--text-secondary)'}}>
+                        {t('nintendo.callbackLabel')}
+                      </label>
+                      <textarea className="input" rows="3" style={{width:'100%', resize:'vertical'}} value={nintendoCallback}
+                        onChange={e => setNintendoCallback(e.target.value)} placeholder={t('nintendo.callbackPlaceholder')} />
+                      <button className="btn btn-sm btn-primary" style={{marginTop:8}} onClick={handleNintendoComplete} disabled={!!settingsOperation}>
+                        {t('nintendo.verifyCallback')}
+                      </button>
+                    </div>
+                  )}
+
+                  <div style={{height:1, background:'var(--divider)', margin:'16px 0'}}></div>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+                    <span style={{fontSize:13, fontWeight:600}}>{t('account.boundAccounts')}</span>
+                    <button className="btn btn-xs" onClick={loadNintendoAccounts}>{t('actions.refresh')}</button>
+                  </div>
+
+                  {Object.keys(nintendoAccounts).length === 0 ? (
+                    <p style={{textAlign:'center', color:'var(--text-secondary)', padding:20, fontSize:13}}>{t('nintendo.noAccounts')}</p>
+                  ) : (
+                    Object.entries(nintendoAccounts).map(([accountId, info]) => (
+                      <div key={accountId} className="steam-account-row">
+                        <div className="avatar-fallback" style={{width:40, height:40, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--accent-glow)', color:'var(--accent)', flexShrink:0}}>N</div>
+                        <div className="name" style={{display:'flex', flexDirection:'column', gap:2}}>
+                          <span>{info.display_name || accountId}</span>
+                          <small style={{fontSize:10, color: info.needs_reauth ? 'var(--danger)' : 'var(--text-secondary)'}}>
+                            {info.needs_reauth ? t('nintendo.reauthRequired') : (info.last_sync_at ? t('nintendo.lastSynced') : t('nintendo.notSynced'))}
+                          </small>
+                        </div>
+                        <div className="actions">
+                          <button className="btn btn-xs btn-primary" onClick={() => handleNintendoSync(accountId)} disabled={!!settingsOperation}>{t('actions.sync')}</button>
+                          <button className="btn btn-xs" style={{color:'var(--danger)'}} onClick={() => handleNintendoDeleteImages(accountId)}>{t('actions.deleteImages')}</button>
+                          <button className="btn btn-xs btn-danger" onClick={() => handleNintendoUnbind(accountId)}>{t('actions.unbind')}</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {nintendoPreview && (
+                    <div style={{marginTop:16, borderTop:'1px solid var(--divider)', paddingTop:14}}>
+                      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
+                        <span style={{fontSize:13, fontWeight:600}}>{t('nintendo.previewTitle', {count: nintendoPreview.received || 0})}</span>
+                        <span style={{fontSize:11, color:'var(--text-secondary)'}}>{t('nintendo.selectedCount', {count: nintendoSelected.size})}</span>
+                      </div>
+                      <div style={{maxHeight:280, overflowY:'auto', border:'1px solid var(--border)', borderRadius:'var(--radius-md)'}}>
+                        {(nintendoPreview.titles || []).map(title => (
+                          <label key={title.record_key} style={{display:'flex', alignItems:'center', gap:8, padding:'7px 9px', borderBottom:'1px solid var(--divider)', cursor:'pointer'}}>
+                            <input type="checkbox" style={{accentColor:'var(--accent)'}} checked={nintendoSelected.has(title.record_key)}
+                              onChange={() => setNintendoSelected(previous => { const next = new Set(previous); next.has(title.record_key) ? next.delete(title.record_key) : next.add(title.record_key); return next; })} />
+                            <span style={{flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{title.title_name}</span>
+                            <span style={{fontSize:10, color:'var(--text-secondary)', flexShrink:0}}>{title.total_played_minutes == null ? t('nintendo.unknownTime') : t('nintendo.minutes', {count: title.total_played_minutes})}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div style={{display:'flex', gap:8, marginTop:10}}>
+                        <button className="btn btn-sm btn-primary" onClick={handleNintendoImport} disabled={!!settingsOperation || !nintendoSelected.size}>{t('nintendo.importSelected')}</button>
+                        <button className="btn btn-sm" onClick={() => { setNintendoPreview(null); setNintendoSelected(new Set()); setNintendoImportRequestId(''); }} disabled={!!settingsOperation}>{t('actions.cancel')}</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {settingsActiveSection === 'download' && (
                 <div>
+                  <SettingsSectionHeading title={t('settings.tabs.download')} />
                   {downloadSettings?.runtime_mode === 'browser' ? (
                     <div style={{padding:'14px', border:'1px solid var(--border)', borderRadius:'var(--radius-md)', background:'var(--surface)'}}>
                       <div style={{fontSize:13, fontWeight:600, marginBottom:8}}>{t('download.browserManagedTitle')}</div>
@@ -3653,6 +4683,7 @@ function App() {
 
             {settingsActiveSection === 'storage' && (
               <div>
+                <SettingsSectionHeading title={t('settings.tabs.cleanup')} />
                 <p style={{fontSize:13, color:'var(--text-secondary)', marginBottom:16}}>
                   {t('storage.description')}
                 </p>
@@ -3661,7 +4692,10 @@ function App() {
                     {key:'steam', label:t('storage.clearSteam')},
                     {key:'igdb', label:t('storage.clearIgdb')},
                     {key:'bangumi', label:t('storage.clearBangumi')},
+                    {key:'vndb', label:t('storage.clearVndb')},
+                    {key:'steamgriddb', label:t('storage.clearSteamgriddb')},
                     {key:'xbox', label:t('storage.clearXbox')},
+                    {key:'nintendo', label:t('storage.clearNintendo')},
                     {key:'cache', label:t('storage.clearGeneric')},
                   ].map(s => (
                     <button key={s.key} className="btn btn-sm" onClick={() => handleClearSource(s.key)}
@@ -3679,9 +4713,7 @@ function App() {
 
             {settingsActiveSection === 'licenses' && (
               <div>
-                <p style={{fontSize:13, color:'var(--text-secondary)', marginBottom:16, lineHeight:1.6}}>
-                  {t('settings.licensesDescription')}
-                </p>
+                <SettingsSectionHeading title={t('settings.tabs.licenses')} description={t('settings.licensesDescription')} />
                 {openSourceLicenses.length === 0 ? (
                   <p style={{fontSize:13, color:'var(--text-secondary)'}}>{t('common.pleaseWait')}</p>
                 ) : (
@@ -3691,7 +4723,7 @@ function App() {
                         border:'1px solid var(--border-strong)', borderRadius:'var(--radius-md)',
                         background:'var(--surface)', overflow:'hidden'
                       }}>
-                        <div style={{padding:'10px 12px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', gap:8, alignItems:'baseline'}}>
+                        <div style={{padding:'10px 12px', borderBottom:'1px solid var(--divider)', display:'flex', justifyContent:'space-between', gap:8, alignItems:'baseline'}}>
                           <span style={{fontSize:13, fontWeight:700}}>{license.name}</span>
                           <span style={{fontSize:11, color:'var(--text-secondary)', whiteSpace:'nowrap'}}>{license.license}</span>
                         </div>
@@ -3783,7 +4815,7 @@ function App() {
             display:'flex', flexDirection:'column',
             boxShadow:'0 16px 48px rgba(0,0,0,0.5)'
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', borderBottom:'1px solid var(--border)' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', borderBottom:'1px solid var(--divider-strong)' }}>
                 {/*<span style={{fontSize:16, fontWeight:700}}>{t('preset.title')}</span>*/}
               <button className="btn btn-icon btn-sm" onClick={() => setShowPresetsModal(false)}>✕</button>
             </div>
