@@ -1,0 +1,92 @@
+/* Top toolbar */
+.top-toolbar {
+  position: relative; z-index: 100; overflow: visible;
+  display: flex; align-items: center; gap: var(--spacing-sm);
+  min-height: 56px; flex-wrap: wrap;
+  padding: 8px var(--spacing-md);
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  backdrop-filter: var(--glass-blur);
+  flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 2px 12px rgba(0,0,0,0.08);
+}
+.top-toolbar .toolbar-group { padding:4px; gap:3px; }
+.top-toolbar .toolbar-group .input { min-height:32px; }
+.top-toolbar .toolbar-group .btn { min-height:32px; }
+.toolbar-group.toolbar-primary-actions { border-color:rgba(91,156,245,0.2); }
+.toolbar-group.toolbar-primary-actions .btn-success { background:var(--accent); color:#fff; }
+.toolbar-group.toolbar-primary-actions .btn-success:hover { background:var(--accent-hover); }
+.toolbar-caption { padding:0 4px; color:var(--text-secondary); font-size:11px; font-weight:600; white-space:nowrap; }
+@media (max-width:1100px) {
+  .top-toolbar { gap:6px; }
+  .toolbar-caption { display:none; }
+  .toolbar-group.template-selector-group { max-width:calc(100vw - 280px); }
+}
+@media (max-width:760px) {
+  .top-toolbar { align-items:stretch; }
+  .top-toolbar .toolbar-group { flex-wrap:wrap; }
+  .toolbar-spacer { display:none; }
+  .tier-list-area { padding:10px; }
+}
+.toolbar-spacer { flex: 1; }
+
+/* Loading overlay */
+.loading-overlay {
+  display: flex; align-items: center; justify-content: center;
+  height: 100vh; background: var(--bg-page);
+}
+.refresh-overlay {
+  position:fixed; inset:0; z-index:4500;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(2,2,12,0.58); backdrop-filter:blur(6px);
+}
+.refresh-panel {
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+  min-width:260px; padding:28px 36px;
+  border:1px solid var(--border-strong); border-radius:var(--radius-xl);
+  background:linear-gradient(145deg, rgba(34,34,62,0.92), rgba(12,12,30,0.95));
+  box-shadow:var(--glass-shadow), 0 20px 60px rgba(0,0,0,0.45);
+  color:var(--text-primary); font-size:15px; font-weight:600;
+}
+[data-theme="light"] .refresh-panel {
+  background:linear-gradient(145deg, rgba(255,255,255,0.94), rgba(238,241,250,0.96));
+}
+
+/* Steam import progress */
+.steam-progress-overlay {
+  position: fixed; inset: 0; z-index: 3500;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.65); backdrop-filter: blur(8px);
+}
+.steam-progress-panel {
+  background: rgba(20,20,40,0.95); backdrop-filter: blur(30px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-xl); padding: 32px 40px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6); min-width: 260px;
+}
+.steam-progress-ring { transform: rotate(-90deg); }
+.steam-progress-ring circle { transition: stroke-dashoffset 0.3s ease; }
+.steam-progress-text { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+
+/* Steam accounts list */
+.steam-account-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; margin-bottom: 8px;
+  background: var(--surface); backdrop-filter: var(--glass-blur);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+.steam-account-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.steam-account-row .avatar { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
+.steam-account-row .avatar-fallback {
+  display: grid; place-items: center; background: var(--accent-glow);
+  border: 1px solid rgba(91,156,245,0.3); color: var(--accent-hover);
+  font-size: 14px; font-weight: 700; text-transform: uppercase;
+}
+.steam-account-row .name { flex: 1; font-weight: 600; font-size: 14px; }
+.steam-account-row .actions { display: flex; gap: 6px; flex-shrink: 0; }

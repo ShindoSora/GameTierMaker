@@ -1,0 +1,11 @@
+{
+  "name": "game-tier-maker-frontend-checks",
+  "private": true,
+  "scripts": {
+    "test": "node --test regression.cjs"
+  },
+  "devDependencies": {
+    "react": "18.3.1",
+    "react-test-renderer": "18.3.1"
+  }
+}

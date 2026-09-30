@@ -23,6 +23,7 @@ __pycache__/
 
 # === Node.js ===
 /node_modules/
+/tools/frontend/node_modules/
 /packaging/node_modules/
 
 # === Build and release artifacts ===
