@@ -50,7 +50,19 @@
             title={libraryOpen ? t('library.collapse') : t('library.expand')}
             aria-label={libraryOpen ? t('library.collapse') : t('library.expand')}
           >
-            {libraryOpen ? '◀' : '▶'}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d={libraryOpen ? 'M10 4L6 8L10 12' : 'M6 4L10 8L6 12'} />
+            </svg>
           </button>
         </div>
         {/* Library Sidebar */}
@@ -65,12 +77,7 @@
               : {}
           }
         >
-          <div
-            style={{
-              padding: 10,
-              borderBottom: '1px solid var(--border)',
-            }}
-          >
+          <div className="library-header">
             <div
               className="library-search-row"
               style={{

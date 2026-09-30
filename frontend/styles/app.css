@@ -1,8 +1,8 @@
 /* Keep this order: later rules intentionally override earlier layout rules. */
 @import url("./base.css");
 @import url("./tier-board.css");
-@import url("./layout.css");
-@import url("./components.css");
+@import url("./layout.css?v=20260930-rounded-panels-v4");
+@import url("./components.css?v=20260930-group-theme-frame");
 @import url("./logs.css");
 @import url("./settings.css");
-@import url("./overrides.css");
+@import url("./overrides.css?v=20260930-rounded-panels-v2");

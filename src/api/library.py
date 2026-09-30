@@ -5,6 +5,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from src.api.deps import get_manager
+from src.core.library_groups import format_account_group_name
 
 router = APIRouter()
 
@@ -15,7 +16,7 @@ def build_library_payload(mgr, template_id: str | None = None):
         groups = [
             {
                 "id": group.id,
-                "name": group.name,
+                "name": format_account_group_name(group.id, group.name),
                 "image_ids": list(group.image_ids),
                 "is_expanded": template.library_group_states.get(group.id, False),
             }

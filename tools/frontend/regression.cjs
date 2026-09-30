@@ -62,6 +62,36 @@ function mount(hook, props = {}) {
   };
 }
 
+test('library groups keep source colors after reorder and prefix account names in both views', () => {
+  const env = environment();
+  env.load('features/library/LibraryGroup.jsx');
+  const entries = [
+    {id:'default_upload', name:'搜索结果', color:'#A78BFA', title:'library.groups.searchResults'},
+    {id:'local_upload', name:'已上传图片', color:'#F5B942', title:'library.groups.uploadedImages'},
+    {id:'psn_import_123', name:'玩家', color:'#00439C', title:'PS:玩家'},
+    {id:'xbox:123', name:'玩家', color:'#107C10', title:'Xbox:玩家'},
+    {id:'nintendo:123', name:'玩家', color:'#E60012', title:'Nintendo:玩家'},
+    {id:'steam_import_123', name:'玩家', color:'#66C0F4', title:'Steam:玩家'},
+    {id:'custom', name:'PS:自定义', color:'#94A3B8', title:'PS:自定义'},
+  ];
+  for (const group of [...entries].reverse()) {
+    for (const expandedView of [false, true]) {
+      let renderer;
+      act(() => { renderer = Renderer.create(React.createElement(env.app.LibraryGroup, {
+        group: {...group, image_ids:[]}, expandedView,
+      })); });
+      const root = renderer.toJSON();
+      assert.equal(root.props.style['--group-accent'], group.color);
+      assert.ok(JSON.stringify(root).includes(group.title));
+      act(() => renderer.unmount());
+    }
+  }
+  assert.equal(env.app.getLibraryGroupName({id:'psn_import_123',name:'PSN: 玩家'}),'PS:玩家');
+  assert.equal(env.app.getLibraryGroupName({id:'psn_import_123',name:'PS:玩家'}),'PS:玩家');
+  assert.equal(env.app.getLibraryGroupName({id:'xbox:123456789',name:'Xbox 12345678'}),'Xbox:12345678');
+  assert.equal(env.app.getLibraryGroupName({id:'nintendo:123456789',name:''}),'Nintendo:12345678');
+});
+
 test('HTML manifest loads every module in dependency order and preserves bootstrap', async () => {
   const html = read('index.html');
   assert.match(html, /content="__GTM_SESSION_BOOTSTRAP__"/);

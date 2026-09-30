@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from src.api.deps import get_manager
+from src.core.library_groups import format_account_group_name
 from src.core.errors import (
     AccountNotFoundError,
     AppError,
@@ -77,7 +78,7 @@ def _group_id(account_id: str) -> str:
 
 def _group_name(account: dict[str, Any], account_id: str) -> str:
     display = str(account.get("display_name") or "").strip()
-    return display or ("Nintendo " + account_id[:8])
+    return format_account_group_name(_group_id(account_id), display)
 
 
 def _manager_games(titles: list[dict[str, Any]]) -> list[dict[str, Any]]:

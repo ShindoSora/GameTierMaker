@@ -5,10 +5,32 @@
   const { t } = window.GameTierI18n;
   const { storeDragEvent, calculateInsertIndex, dragState, clearDragEvent, DraggableImage } =
     window.GameTierApp;
+  // Colors identify the source, independent of group order or account nickname.
+  const accountPlatforms = [
+    { idPrefix: 'psn_import_', label: 'PS', aliases: ['PS', 'PSN', 'PlayStation'], legacy: 'PSN', color: '#00439C' },
+    { idPrefix: 'xbox:', label: 'Xbox', aliases: ['Xbox'], legacy: 'Xbox', color: '#107C10' },
+    { idPrefix: 'nintendo:', label: 'Nintendo', aliases: ['Nintendo'], legacy: 'Nintendo', color: '#E60012' },
+    { idPrefix: 'steam_import_', label: 'Steam', aliases: ['Steam'], legacy: 'Steam', color: '#66C0F4' },
+  ];
+  function getLibraryGroupPlatform(group) {
+    return accountPlatforms.find((platform) => group.id.startsWith(platform.idPrefix));
+  }
+  function getLibraryGroupColor(group) {
+    if (group.id === 'default_upload') return '#A78BFA';
+    if (group.id === 'local_upload') return '#F5B942';
+    return getLibraryGroupPlatform(group)?.color || '#94A3B8';
+  }
   function getLibraryGroupName(group) {
     if (group.id === 'default_upload') return t('library.groups.searchResults');
     if (group.id === 'local_upload') return t('library.groups.uploadedImages');
-    return group.name;
+    const platform = getLibraryGroupPlatform(group);
+    if (!platform) return group.name;
+    const accountId = group.id.slice(platform.idPrefix.length);
+    let name = (group.name || '').trim();
+    const alias = platform.aliases.find((label) => name.toLowerCase().startsWith(label.toLowerCase() + ':'));
+    if (alias) name = name.slice(alias.length + 1).trim();
+    if (name === `${platform.legacy} ${accountId.slice(0, 8)}`) name = accountId.slice(0, 8);
+    return `${platform.label}:${name || accountId.slice(0, 8)}`;
   }
   function LibraryGroup({
     group,
@@ -111,7 +133,7 @@
       return (
         <div
           className={`library-group-overlay ${closing ? 'closing' : ''}`}
-          style={overlayStyle}
+          style={{ '--group-accent': getLibraryGroupColor(group), ...overlayStyle }}
           onAnimationEnd={onAnimationEnd}
           onClick={onClose}
         >
@@ -141,7 +163,7 @@
       );
     }
     return (
-      <div className="library-group-item">
+      <div className="library-group-item" style={{ '--group-accent': getLibraryGroupColor(group) }}>
         <div className="collapse-header" onClick={(e) => onOpen?.(e, group)}>
           <span
             style={{
@@ -156,6 +178,7 @@
   }
   Object.assign(window.GameTierApp, {
     getLibraryGroupName,
+    getLibraryGroupColor,
     LibraryGroup,
   });
 })();

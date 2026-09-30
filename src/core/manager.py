@@ -28,6 +28,7 @@ from .image_security import (
     validate_image_file,
 )
 from .version import LEGACY_PROJECT_SCHEMA_VERSIONS, PROJECT_SCHEMA_VERSION
+from .library_groups import format_account_group_name
 from .json_store import (
     JsonStoreError,
     JsonValidationError,
@@ -1697,6 +1698,7 @@ class ProjectManager:
         changed = False
         library = target_template.hidden_preset
         group = library.find_group_by_id(group_id)
+        group_name = format_account_group_name(group_id, group_name or (group.name if group else ""))
         if not group:
             group = ImageGroup(id=group_id, name=group_name or group_id, image_ids=[])
             library.groups.append(group)

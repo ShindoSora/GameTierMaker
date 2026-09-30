@@ -24,6 +24,7 @@ from src.core.config_handler import (
 from src.core.steam.steam_client import SteamInformation
 from src.api.deps import get_manager
 from src.core.models import ImageGroup
+from src.core.library_groups import format_account_group_name
 from src.core.errors import (
     AccountNotFoundError,
     AppError,
@@ -733,7 +734,7 @@ def _steam_group_name(steamid: str) -> str:
     """返回 Steam 账号图片组名称。"""
     accounts = SteamInformation.get_accounts()
     info = accounts.get(str(steamid), {})
-    return (info.get("personaname") or "").strip() or ("Steam " + str(steamid)[:8])
+    return format_account_group_name("steam_import_" + str(steamid), info.get("personaname"))
 
 
 def _ensure_steam_group(steamid, template_id: str | None = None):
@@ -763,7 +764,7 @@ def _ensure_psn_group(account_id, online_id, template_id: str | None = None):
     """为指定 PSN 账号创建/查找独立分组，分组名使用 PSN 在线 ID"""
     mgr = get_manager()
     sid = "psn_import_" + str(account_id)
-    gname = (online_id or "").strip() or ("PSN " + str(account_id)[:8])
+    gname = format_account_group_name(sid, online_id)
 
     target = mgr.get_template(template_id)
     library = target.hidden_preset
@@ -1139,7 +1140,7 @@ def _ensure_xbox_group(xuid, gamertag, template_id: str | None = None):
     """为指定 Xbox 账号创建/查找独立分组"""
     mgr = get_manager()
     sid = "xbox:" + str(xuid)
-    gname = gamertag.strip() or ("Xbox " + str(xuid)[:8])
+    gname = format_account_group_name(sid, gamertag)
 
     target = mgr.get_template(template_id)
     library = target.hidden_preset
