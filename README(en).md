@@ -14,9 +14,13 @@ Nintendo accounts use play-activity import: open Nintendo sign-in from Settings,
 
 The application supports creating multiple sorting templates. You can right-click a tier row to change its color and double-click it to rename it.
 
-<img width="1575" height="1009" alt="image" src="https://github.com/user-attachments/assets/bc277120-2ae6-4e6f-a40e-3abc01f9fbf1" />
+<img width="1263" height="807" alt="image" src="https://github.com/user-attachments/assets/d118b779-87eb-4097-919c-859ce57da01f" />
 
-<img width="1575" height="1008" alt="image" src="https://github.com/user-attachments/assets/c0b6e0e2-d9b8-44bb-b38d-26f416b26b00" />
+<!-- <img width="1575" height="1009" alt="image" src="https://github.com/user-attachments/assets/bc277120-2ae6-4e6f-a40e-3abc01f9fbf1" /> -->
+<img width="1257" height="807" alt="image" src="https://github.com/user-attachments/assets/4a7eefc8-1777-4450-822e-a66314152388" />
+
+
+<!-- <img width="1575" height="1008" alt="image" src="https://github.com/user-attachments/assets/c0b6e0e2-d9b8-44bb-b38d-26f416b26b00" /> -->
 
 
 ## Running from Source
