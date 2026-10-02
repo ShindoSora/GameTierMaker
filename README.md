@@ -13,8 +13,10 @@ Game Tier Maker 是一个在本地运行的游戏 Tier List 制作工具
 Nintendo 账号使用游玩记录导入：在设置中打开 Nintendo 登录页，登录后将地址栏中的 `npf...://auth` 回调链接粘贴回程序，再预览并选择要导入的游戏。Nintendo 的游玩记录接口属于未公开接口，记录可能延迟，当前集成以真实账号联调结果为准；绑定说明和开发契约见 [NINTENDO_IMPORT_DEV.md](aimd/NINTENDO_IMPORT_DEV.md)。
 
 程序可以新建多个排序模板，右键等级行可以更改颜色，双击可以改名
-<img width="1573" height="1013" alt="image" src="https://github.com/user-attachments/assets/58bbc950-6918-4c82-9c9e-028d371b753e" />
-<img width="1571" height="992" alt="image" src="https://github.com/user-attachments/assets/a247ae21-bab6-4458-bd23-2310d4f4ae77" />
+<!-- <img width="1573" height="1013" alt="image" src="https://github.com/user-attachments/assets/58bbc950-6918-4c82-9c9e-028d371b753e" /> -->
+<img width="1258" height="807" alt="image" src="https://github.com/user-attachments/assets/c2271281-2f59-4a36-8dc7-8ef68bdaee93" />
+<img width="1261" height="809" alt="image" src="https://github.com/user-attachments/assets/ad95dbea-d08b-4ae9-9151-286175818cd1" />
+<!-- <img width="1571" height="992" alt="image" src="https://github.com/user-attachments/assets/a247ae21-bab6-4458-bd23-2310d4f4ae77" /> -->
 
 
 
