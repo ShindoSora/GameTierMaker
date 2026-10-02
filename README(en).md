@@ -10,7 +10,6 @@ You can use the search feature to find game covers and other content, or configu
 
 You can import local images into the application.
 
-Nintendo accounts use play-activity import: open Nintendo sign-in from Settings, then paste the `npf...://auth` callback link from the browser address bar back into the app and choose which games to import. Nintendo's play-history endpoint is undocumented and its data may be delayed; the current integration is subject to real-account verification. See [NINTENDO_IMPORT_DEV.md](aimd/NINTENDO_IMPORT_DEV.md) for the binding flow and development contract.
 
 The application supports creating multiple sorting templates. You can right-click a tier row to change its color and double-click it to rename it.
 
