@@ -11,6 +11,9 @@
     backfillModel,
     settingsModel,
     logsModel,
+    settingsAnchorRef,
+    logAnchorRef,
+    logToolbarRef,
   }) {
     const {
       templates,
@@ -310,7 +313,7 @@
           </div>
         )}
 
-        <button className="btn btn-sm" onClick={handleOpenSettings} title={t('settings.title')}>
+        <button ref={settingsAnchorRef} className="btn btn-sm" onClick={handleOpenSettings} title={t('settings.title')}>
           <svg
             width="14"
             height="14"
@@ -324,8 +327,12 @@
           </svg>
         </button>
         <button
+          ref={logToolbarRef}
           className={`sidebar-toggle ${logOpen ? 'active' : ''}`}
-          onClick={() => setLogOpen((open) => !open)}
+          onClick={(event) => {
+            if (logAnchorRef) logAnchorRef.current = event.currentTarget;
+            setLogOpen((open) => !open);
+          }}
           title={logOpen ? t('logs.collapse') : t('logs.expand')}
           aria-label={logOpen ? t('logs.collapse') : t('logs.expand')}
         >

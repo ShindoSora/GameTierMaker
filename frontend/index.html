@@ -9,31 +9,32 @@
 <script src="/vendor/react.production.min.js"></script>
 <script src="/vendor/react-dom.production.min.js"></script>
 <script src="/vendor/babel.min.js"></script>
-<script src="/i18n.js?v=20260920-ui-refresh"></script>
-<link rel="stylesheet" href="/styles/app.css?v=20260930-group-theme-frame">
+<script src="/i18n.js?v=20261002-glass-dialogs"></script>
+<link rel="stylesheet" href="/styles/app.css?v=20261002-account-inline">
 </head>
 <body>
 <div id="root"></div>
 
 <script src="/src/namespace.js"></script>
 <script type="text/babel" data-presets="react" src="/src/core/constants.js"></script>
-<script type="text/babel" data-presets="react" src="/src/core/preferences.js"></script>
+<script type="text/babel" data-presets="react" src="/src/core/preferences.js?v=20261001-glass-controls"></script>
 <script type="text/babel" data-presets="react" src="/src/core/session.js"></script>
 <script type="text/babel" data-presets="react" src="/src/core/api.js"></script>
 <script type="text/babel" data-presets="react" src="/src/core/exportImage.js"></script>
-<script type="text/babel" data-presets="react" src="/src/core/display.js"></script>
+<script type="text/babel" data-presets="react" src="/src/core/display.js?v=20261001-group-island-v2"></script>
 <script type="text/babel" data-presets="react" src="/src/core/toast.js"></script>
 <script type="text/babel" data-presets="react" src="/src/core/dragDrop.js"></script>
-<script type="text/babel" data-presets="react" src="/src/features/tierBoard/DraggableImage.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/features/library/LibraryGroup.jsx?v=20260930-group-sources"></script>
-<script type="text/babel" data-presets="react" src="/src/features/search/SearchResults.jsx"></script>
+<script type="text/babel" data-presets="react" src="/src/core/imageDissolve.js?v=20261002-group-particles"></script>
+<script type="text/babel" data-presets="react" src="/src/features/tierBoard/DraggableImage.jsx?v=20261002-particles"></script>
+<script type="text/babel" data-presets="react" src="/src/features/library/LibraryGroup.jsx?v=20261002-group-particles"></script>
+<script type="text/babel" data-presets="react" src="/src/features/search/SearchResults.jsx?v=20261001-search-retained"></script>
 <script type="text/babel" data-presets="react" src="/src/components/Controls.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/features/tierBoard/TierRow.jsx"></script>
+<script type="text/babel" data-presets="react" src="/src/features/tierBoard/TierRow.jsx?v=20260930-tier-cards-a"></script>
 <script type="text/babel" data-presets="react" src="/src/features/templates/TemplateSelector.jsx"></script>
 <script type="text/babel" data-presets="react" src="/src/components/LanguageSelector.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/features/logs/LogSidebar.jsx"></script>
+<script type="text/babel" data-presets="react" src="/src/features/logs/LogSidebar.jsx?v=20261001-settings-log-island"></script>
 <script type="text/babel" data-presets="react" src="/src/components/Dialogs.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/components/TopToolbar.jsx"></script>
+<script type="text/babel" data-presets="react" src="/src/components/TopToolbar.jsx?v=20261001-settings-log-island"></script>
 <script type="text/babel" data-presets="react" src="/src/features/tierBoard/TierBoard.jsx"></script>
 <script type="text/babel" data-presets="react" src="/src/features/settings/LanguageSettings.jsx"></script>
 <script type="text/babel" data-presets="react" src="/src/features/settings/SearchSettings.jsx"></script>
@@ -44,21 +45,22 @@
 <script type="text/babel" data-presets="react" src="/src/features/settings/DownloadSettings.jsx"></script>
 <script type="text/babel" data-presets="react" src="/src/features/settings/StorageSettings.jsx"></script>
 <script type="text/babel" data-presets="react" src="/src/features/settings/AboutSettings.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/features/settings/SettingsPanel.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/features/tierBoard/ColorPicker.jsx"></script>
+<script type="text/babel" data-presets="react" src="/src/features/settings/SettingsPanel.jsx?v=20261002-no-blur"></script>
+<script type="text/babel" data-presets="react" src="/src/features/tierBoard/ColorPicker.jsx?v=20261002-no-blur"></script>
 <script type="text/babel" data-presets="react" src="/src/features/tierBoard/TierContextMenu.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/features/library/PresetsDialog.jsx"></script>
-<script type="text/babel" data-presets="react" src="/src/features/library/LibraryPanel.jsx?v=20260930-rounded-panels-v4"></script>
+<script type="text/babel" data-presets="react" src="/src/features/library/PresetsDialog.jsx?v=20261002-no-blur"></script>
+<script type="text/babel" data-presets="react" src="/src/features/library/LibraryPanel.jsx?v=20261001-search-retained"></script>
 <script type="text/babel" data-presets="react" src="/src/hooks/useDialogs.js"></script>
 <script type="text/babel" data-presets="react" src="/src/hooks/useBusy.js"></script>
-<script type="text/babel" data-presets="react" src="/src/hooks/useUiPreferences.js"></script>
+<script type="text/babel" data-presets="react" src="/src/hooks/useUiPreferences.js?v=20261001-glass-controls"></script>
 <script type="text/babel" data-presets="react" src="/src/hooks/useLanguage.js"></script>
+<script type="text/babel" data-presets="react" src="/src/hooks/useIslandPanel.js?v=20261001-settings-log-island"></script>
 <script type="text/babel" data-presets="react" src="/src/features/templates/useTemplates.js"></script>
 <script type="text/babel" data-presets="react" src="/src/features/search/useGameSearch.js"></script>
-<script type="text/babel" data-presets="react" src="/src/features/library/useLibraryActions.js"></script>
+<script type="text/babel" data-presets="react" src="/src/features/library/useLibraryActions.js?v=20261002-group-particles"></script>
 <script type="text/babel" data-presets="react" src="/src/features/tierBoard/useTierActions.js"></script>
-<script type="text/babel" data-presets="react" src="/src/features/images/useImageActions.js"></script>
-<script type="text/babel" data-presets="react" src="/src/features/logs/useLiveLogs.js"></script>
+<script type="text/babel" data-presets="react" src="/src/features/images/useImageActions.js?v=20261002-particles"></script>
+<script type="text/babel" data-presets="react" src="/src/features/logs/useLiveLogs.js?v=20260930-dual-logs"></script>
 <script type="text/babel" data-presets="react" src="/src/features/settings/useSettings.js"></script>
 <script type="text/babel" data-presets="react" src="/src/features/settings/useDownloadSettings.js"></script>
 <script type="text/babel" data-presets="react" src="/src/features/platforms/useSteamAccount.js"></script>
@@ -67,7 +69,7 @@
 <script type="text/babel" data-presets="react" src="/src/features/platforms/useNintendoAccount.js"></script>
 <script type="text/babel" data-presets="react" src="/src/features/images/useImageBackfill.js"></script>
 <script type="text/babel" data-presets="react" src="/src/features/settings/useStorageActions.js"></script>
-<script type="text/babel" data-presets="react" src="/src/App.jsx"></script>
+<script type="text/babel" data-presets="react" src="/src/App.jsx?v=20261002-no-blur"></script>
 <script type="text/babel" data-presets="react" src="/src/main.jsx"></script>
 </body>
 </html>

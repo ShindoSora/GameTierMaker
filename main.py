@@ -36,7 +36,7 @@ from src.api.error_handlers import register_error_handlers
 from src.core.errors import InvalidInputError
 from src.core.export_service import MAX_EXPORT_BYTES
 from src.core.image_security import MAX_UPLOAD_BYTES
-from src.core.live_logs import RedactingFormatter, install_session_log_handler
+from src.core.live_logs import RedactingFormatter, install_console_capture, install_session_log_handler
 from src.core.version import APP_VERSION
 
 # PyInstaller windowed applications may not provide standard streams. Some
@@ -111,6 +111,7 @@ RUNTIME_MODE = "desktop" if IS_FROZEN  else "browser"
 os.environ["GAMELIST_RUNTIME_MODE"] = RUNTIME_MODE
 
 # ── 日志 ──────────────────────────────────────────────
+install_console_capture()
 log_level = logging.DEBUG if IS_DEBUG else logging.INFO
 log_file = str(LOG_DIR / "app.log")
 log_formatter = RedactingFormatter(

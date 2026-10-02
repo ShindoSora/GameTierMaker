@@ -98,7 +98,7 @@ class ImageService:
     def _thumbnail_dimensions(width: int, height: int) -> tuple[int, int]:
         if width <= 0 or height <= 0:
             raise ValueError("invalid image dimensions")
-        scale_ratio = min(128 / width, 128 / height)
+        scale_ratio = min(512 / width, 512 / height)
         return (
             max(1, int(width * scale_ratio)),
             max(1, int(height * scale_ratio)),

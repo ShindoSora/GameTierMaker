@@ -1,8 +1,9 @@
 (() => {
   'use strict';
 
+  const { useEffect, useLayoutEffect, useRef, useState } = React;
   const { t } = window.GameTierI18n;
-  const { SearchResults, LibraryGroup } = window.GameTierApp;
+  const { SearchResults, SearchResultsMinimized, LibraryGroup, getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } = window.GameTierApp;
   function LibraryPanel({
     preferencesModel,
     searchModel,
@@ -12,6 +13,83 @@
     templatesModel,
   }) {
     const { libraryOpen, setLibraryOpen, libraryWidth, setLibraryWidth } = preferencesModel;
+    const [phase, setPhase] = useState(libraryOpen ? 'open' : 'closed');
+    const toggleRef = useRef(null);
+    const panelRef = useRef(null);
+    const contentRef = useRef(null);
+    const animationRef = useRef(null);
+    const contentAnimationRef = useRef(null);
+    const previousOpenRef = useRef(libraryOpen);
+    const requestedTargetRef = useRef(null);
+    const cancelMotion = () => {
+      if (animationRef.current) {
+        animationRef.current.onfinish = null;
+        animationRef.current.cancel();
+        animationRef.current = null;
+      }
+      contentAnimationRef.current?.cancel();
+      contentAnimationRef.current = null;
+    };
+    useEffect(() => () => cancelMotion(), []);
+    useEffect(() => {
+      const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+      const onChange = () => {
+        if (!media?.matches) return;
+        cancelMotion();
+        setPhase(previousOpenRef.current ? 'open' : 'closed');
+      };
+      media?.addEventListener?.('change', onChange);
+      return () => media?.removeEventListener?.('change', onChange);
+    }, []);
+    useLayoutEffect(() => {
+      const changed = previousOpenRef.current !== libraryOpen;
+      previousOpenRef.current = libraryOpen;
+      const requested = requestedTargetRef.current === libraryOpen;
+      requestedTargetRef.current = null;
+      const panel = panelRef.current;
+      const content = contentRef.current;
+      const button = toggleRef.current;
+      const reversing = animationRef.current && ['running', 'pending'].includes(animationRef.current.playState);
+      const current = reversing && panel ? getComputedStyle(panel) : null;
+      const from = current ? { transform: current.transform, borderRadius: current.borderRadius, opacity: current.opacity } : null;
+      const contentOpacity = reversing && content ? Number(getComputedStyle(content).opacity) : libraryOpen ? 0 : 1;
+      cancelMotion();
+      if (!changed || !requested || !panel?.animate || !content?.animate || !button ||
+          window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        setPhase(libraryOpen ? 'open' : 'closed');
+        return;
+      }
+      const panelRect = panel.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      if (!panelRect.width || !panelRect.height || !buttonRect.width || !buttonRect.height) {
+        setPhase(libraryOpen ? 'open' : 'closed');
+        return;
+      }
+      const origin = getIslandOrigin(panelRect, buttonRect, Number.parseFloat(getComputedStyle(button).borderRadius) || 12);
+      const full = { transform: 'none', borderRadius: getComputedStyle(panel).borderRadius, opacity: 1 };
+      const frames = libraryOpen ? [from || origin, full] : [from || full, origin];
+      setPhase(libraryOpen ? 'opening' : 'closing');
+      if (!libraryOpen && panel.contains(document.activeElement)) button.focus({ preventScroll: true });
+      const easing = libraryOpen ? ISLAND_OPEN_EASING : ISLAND_CLOSE_EASING;
+      const options = { duration: ISLAND_DURATION, easing, fill: 'both' };
+      const animation = panel.animate(frames, options);
+      animationRef.current = animation;
+      contentAnimationRef.current = content.animate(libraryOpen
+        ? [{ opacity: contentOpacity }, { opacity: contentOpacity, offset: 0.2 }, { opacity: 1 }]
+        : [{ opacity: contentOpacity }, { opacity: 0, offset: 0.3 }, { opacity: 0 }],
+      { ...options, easing: 'linear' });
+      animation.onfinish = () => {
+        if (animationRef.current !== animation) return;
+        setPhase(libraryOpen ? 'open' : 'closed');
+      };
+    }, [libraryOpen, libraryWidth]);
+    useLayoutEffect(() => {
+      if ((phase === 'open' || phase === 'closed') && animationRef.current?.playState === 'finished') {
+        cancelMotion();
+      }
+    }, [phase]);
+    const panelVisible = libraryOpen || phase !== 'closed';
+    const transitioning = phase === 'opening' || phase === 'closing' || requestedTargetRef.current === libraryOpen;
     const {
       searchQuery,
       setSearchQuery,
@@ -32,7 +110,7 @@
       activeGroupData,
       closingLibraryGroup,
       handleCloseLibraryGroup,
-      handleLibraryGroupAnimationEnd,
+      handleLibraryGroupCloseComplete,
       activeLibraryGroup,
       handleDeleteGroup,
       handleClearGroup,
@@ -45,8 +123,12 @@
       <>
         <div className="library-toggle-rail">
           <button
+            ref={toggleRef}
             className={`sidebar-toggle ${libraryOpen ? 'active' : ''}`}
-            onClick={() => setLibraryOpen(!libraryOpen)}
+            onClick={() => {
+              requestedTargetRef.current = !libraryOpen;
+              setLibraryOpen(!libraryOpen);
+            }}
             title={libraryOpen ? t('library.collapse') : t('library.expand')}
             aria-label={libraryOpen ? t('library.collapse') : t('library.expand')}
           >
@@ -67,16 +149,21 @@
         </div>
         {/* Library Sidebar */}
         <div
-          className={`library-panel ${libraryOpen ? '' : 'collapsed'} ${libraryOpen && libraryWidth <= 240 ? 'compact' : ''}`}
-          style={
-            libraryOpen
-              ? {
-                  width: libraryWidth,
-                  minWidth: libraryWidth,
-                }
-              : {}
-          }
+          className={`library-panel-slot ${transitioning ? 'island-transition' : ''}`}
+          style={{
+            width: libraryOpen ? libraryWidth + 5 : 0,
+            '--library-island-easing': libraryOpen ? ISLAND_OPEN_EASING : ISLAND_CLOSE_EASING,
+          }}
         >
+        <div
+          ref={panelRef}
+          className={`library-panel ${panelVisible ? '' : 'collapsed'} ${libraryWidth <= 240 ? 'compact' : ''} island-${phase}`}
+          data-library-state={phase}
+          style={{ width: libraryWidth, minWidth: libraryWidth }}
+          aria-hidden={!libraryOpen || phase !== 'open'}
+          inert={!libraryOpen || phase !== 'open' ? '' : undefined}
+        >
+          <div ref={contentRef} className="library-panel-content">
           <div className="library-header">
             <div
               className="library-search-row"
@@ -181,20 +268,34 @@
               </button>
             </div>
             {searchMinimized && (
-              <SearchResults
+              <SearchResultsMinimized
                 data={searchResults}
                 loading={searchLoading}
-                activeSource={searchSource}
-                onSourceChange={setSearchSource}
-                onSelect={handleSelectSearchResult}
                 onClose={handleCloseSearchResults}
-                minimized
                 onRestore={() => setSearchMinimized(false)}
               />
             )}
           </div>
-          <div className="library-groups-scroll" ref={libraryGroupsRef}>
-            {activeGroupData ? (
+          <div className="library-groups-area">
+          <div className={`library-groups-scroll ${activeGroupData ? 'covered' : ''}`} ref={libraryGroupsRef}
+            style={{ opacity: activeGroupData ? 0 : 1 }}
+            aria-hidden={!!activeGroupData} inert={activeGroupData ? '' : undefined}>
+            {libraryGroups.map((g) => (
+              <LibraryGroup
+                key={g.id} group={g} images={g.image_ids} onOpen={handleOpenLibraryGroup}
+                onDelete={handleDeleteGroup} onClear={handleClearGroup} onDropToGroup={handleDropToGroup}
+                onDeleteImage={handleDeleteImage} onAddToUnassigned={handleAddToUnassigned} imagesMeta={imagesMeta}
+              />
+            ))}
+          </div>
+            {/* Keep covers and their scroll container mounted while minimized. */}
+            <SearchResults
+              data={searchResults} loading={searchLoading} activeSource={searchSource}
+              onSourceChange={setSearchSource} onSelect={handleSelectSearchResult}
+              onClose={handleCloseSearchResults} onMinimize={() => setSearchMinimized(true)}
+              minimized={searchMinimized} covered={!!activeGroupData}
+            />
+            {activeGroupData && (
               <LibraryGroup
                 key={`active-${activeGroupData.id}`}
                 group={activeGroupData}
@@ -202,11 +303,9 @@
                 expandedView
                 closing={closingLibraryGroup}
                 onClose={handleCloseLibraryGroup}
-                onAnimationEnd={handleLibraryGroupAnimationEnd}
-                overlayStyle={{
-                  '--library-origin-x': `${activeLibraryGroup.originX}px`,
-                  '--library-origin-y': `${activeLibraryGroup.originY}px`,
-                }}
+                onCloseComplete={handleLibraryGroupCloseComplete}
+                originRect={activeLibraryGroup.originRect}
+                sourceListRef={libraryGroupsRef}
                 onDelete={handleDeleteGroup}
                 onClear={handleClearGroup}
                 onDropToGroup={handleDropToGroup}
@@ -214,38 +313,13 @@
                 onAddToUnassigned={handleAddToUnassigned}
                 imagesMeta={imagesMeta}
               />
-            ) : (
-              libraryGroups.map((g) => (
-                <LibraryGroup
-                  key={g.id}
-                  group={g}
-                  images={g.image_ids}
-                  onOpen={handleOpenLibraryGroup}
-                  onDelete={handleDeleteGroup}
-                  onClear={handleClearGroup}
-                  onDropToGroup={handleDropToGroup}
-                  onDeleteImage={handleDeleteImage}
-                  onAddToUnassigned={handleAddToUnassigned}
-                  imagesMeta={imagesMeta}
-                />
-              ))
             )}
-            {!searchMinimized && (
-              <SearchResults
-                data={searchResults}
-                loading={searchLoading}
-                activeSource={searchSource}
-                onSourceChange={setSearchSource}
-                onSelect={handleSelectSearchResult}
-                onClose={handleCloseSearchResults}
-                onMinimize={() => setSearchMinimized(true)}
-              />
-            )}
+          </div>
           </div>
         </div>
 
         {/* 图片库拖拽缩放手柄 */}
-        {libraryOpen && (
+        {libraryOpen && phase === 'open' && (
           <div
             onMouseDown={(e) => {
               e.preventDefault();
@@ -262,6 +336,10 @@
             }}
             style={{
               width: 5,
+              position: 'absolute',
+              left: libraryWidth,
+              top: 0,
+              bottom: 0,
               cursor: 'col-resize',
               flexShrink: 0,
               background: 'transparent',
@@ -272,10 +350,12 @@
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           />
         )}
+        </div>
       </>
     );
   }
   Object.assign(window.GameTierApp, {
+    getLibraryIslandOrigin: getIslandOrigin,
     LibraryPanel,
   });
 })();

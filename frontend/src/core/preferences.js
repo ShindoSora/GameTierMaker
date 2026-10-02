@@ -9,10 +9,13 @@
     settingsOpen: false,
     settingsWidth: 500,
     settingsActiveSection: 'search_settings',
+    liquidGlassEnabled: true,
+    liquidGlassTransparency: 25,
   });
   const PERSISTED_SETTINGS_SECTIONS = Object.freeze([
     'search_settings',
     'language',
+    'appearance',
     'steam_accounts',
     'psn_accounts',
     'xbox_accounts',
@@ -25,7 +28,13 @@
     const raw = saved && typeof saved === 'object' ? saved : {};
     const libraryWidth = Number(raw.libraryWidth);
     const settingsWidth = Number(raw.settingsWidth);
+    const transparency = raw.liquidGlassTransparency;
     return {
+      liquidGlassEnabled: typeof raw.liquidGlassEnabled === 'boolean'
+        ? raw.liquidGlassEnabled : UI_PREFERENCES_DEFAULTS.liquidGlassEnabled,
+      liquidGlassTransparency: typeof transparency === 'number' && Number.isFinite(transparency)
+        ? Math.min(80, Math.max(0, Math.round(transparency)))
+        : UI_PREFERENCES_DEFAULTS.liquidGlassTransparency,
       libraryOpen:
         typeof raw.libraryOpen === 'boolean'
           ? raw.libraryOpen

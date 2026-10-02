@@ -19,7 +19,7 @@
   --accent-glow: rgba(91,156,245,0.18);
   --danger: #f06060;
   --success: #5cdb8b;
-  --glass-blur: blur(24px);
+  --glass-blur: none;
   --glass-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset;
   --sidebar-bg: rgba(10,10,28,0.85);
   --radius-sm: 8px;
@@ -50,7 +50,7 @@
   --text-primary: #1a1a28;
   --text-secondary: #5a5a72;
   --accent-glow: rgba(91,156,245,0.1);
-  --glass-blur: blur(16px);
+  --glass-blur: none;
   --glass-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.9) inset;
   --sidebar-bg: rgba(240,242,248,0.88);
 }

@@ -17,7 +17,7 @@
             alignItems: 'center',
             justifyContent: 'center',
             background: 'rgba(0,0,0,0.6)',
-            backdropFilter: 'blur(4px)',
+            backdropFilter: 'none',
           }}
           onClick={() => setShowPresetsModal(false)}
         >

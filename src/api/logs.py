@@ -4,24 +4,30 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Literal
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from src.core.live_logs import clear_persistent_log_file, session_log_handler
+from src.core.live_logs import clear_persistent_log_file, console_log_handler, session_log_handler
 
 
 router = APIRouter()
+LogSource = Literal["application", "console"]
+
+
+def _handler(source: LogSource):
+    return console_log_handler if source == "console" else session_log_handler
 
 
 @router.get("")
-def get_session_logs(after: int = Query(default=0, ge=0)):
-    return session_log_handler.snapshot(after)
+def get_session_logs(after: int = Query(default=0, ge=0), source: LogSource = "application"):
+    return _handler(source).snapshot(after)
 
 
 @router.post("/clear")
-def clear_session_logs():
-    return session_log_handler.clear_session()
+def clear_session_logs(source: LogSource = "application"):
+    return _handler(source).clear_session()
 
 
 @router.post("/clear-file")
@@ -44,21 +50,32 @@ def _sse_event(event: str, data: dict[str, object], event_id: int | None = None)
 async def stream_session_logs(
     request: Request,
     after: int = Query(default=0, ge=0),
+    source: LogSource = "application",
+    session_id: str = "",
 ):
+    handler = _handler(source)
     last_event_id = request.headers.get("last-event-id", "")
     try:
         cursor = max(after, int(last_event_id or 0))
     except ValueError:
         cursor = after
+    if session_id and session_id != handler.session_id:
+        cursor = 0
 
     async def event_stream():
         nonlocal cursor
-        clear_version = session_log_handler.snapshot(cursor)["clear_version"]
+        initial = handler.snapshot(cursor)
+        clear_version = initial["clear_version"]
         heartbeat_ticks = 0
         yield "retry: 1500\n\n"
+        yield _sse_event("session", {
+            "session_id": initial["session_id"],
+            "clear_version": clear_version,
+            "source": source,
+        })
 
         while not await request.is_disconnected():
-            snapshot = session_log_handler.snapshot(cursor)
+            snapshot = handler.snapshot(cursor)
             current_clear_version = snapshot["clear_version"]
             if current_clear_version != clear_version:
                 clear_version = current_clear_version
@@ -67,6 +84,7 @@ async def stream_session_logs(
                     {
                         "session_id": snapshot["session_id"],
                         "clear_version": clear_version,
+                        "source": source,
                     },
                 )
 

@@ -8,6 +8,7 @@
       colorPicker &&
       colorPicker.show && (
         <div
+          className="tier-color-backdrop"
           style={{
             position: 'fixed',
             inset: 0,
@@ -16,18 +17,17 @@
             alignItems: 'center',
             justifyContent: 'center',
             background: 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(4px)',
           }}
           onClick={() => setColorPicker(null)}
         >
           <div
+            className="tier-color-dialog"
             style={{
-              background: 'var(--bg-secondary)',
               border: '1px solid var(--border-strong)',
               borderRadius: 'var(--radius-lg)',
               padding: 24,
               width: 320,
-              boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+              maxWidth: 'calc(100vw - 32px)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -45,6 +45,7 @@
 
             {/* 调色盘 */}
             <input
+              className="tier-color-input"
               type="color"
               value={colorPicker.color || '#808080'}
               onChange={(e) =>
@@ -74,7 +75,8 @@
               }}
             >
               {PRESET_COLORS.map((c) => (
-                <div
+                <button
+                  type="button"
                   key={c}
                   onClick={() =>
                     setColorPicker({
@@ -83,8 +85,10 @@
                     })
                   }
                   style={{
-                    width: 32,
-                    height: 32,
+                    width: '100%',
+                    minWidth: 0,
+                    aspectRatio: '1',
+                    padding: 0,
                     borderRadius: 6,
                     background: c,
                     cursor: 'pointer',
@@ -97,6 +101,8 @@
                   onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.2)')}
                   onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                   title={c}
+                  aria-label={c}
+                  aria-pressed={colorPicker.color === c}
                 />
               ))}
             </div>

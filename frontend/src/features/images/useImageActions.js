@@ -12,6 +12,7 @@
     canvasToPngBlob,
     buildExportFilename,
     startBrowserDownload,
+    prepareImageDissolve,
   } = window.GameTierApp;
   function useImageActions({
     confirmAction,
@@ -26,19 +27,31 @@
     const fileInputRef = useRef(null);
     const exportingRef = useRef(false);
     const [exporting, setExporting] = useState(false);
+    const deletingImagesRef = useRef(new Set());
     const handleDeleteImage = async (imageId, isGlobal) => {
-      const msg = isGlobal
-        ? t('dialogs.deleteImageGlobally')
-        : t('dialogs.removeImageFromTemplate');
-      if (!(await confirmAction(msg))) return;
-      await fetchAPI(
-        `/images/${imageId}?is_global=${isGlobal}&template_id=${encodeURIComponent(currentId)}`,
-        {
-          method: 'DELETE',
-        }
-      );
-      if (isGlobal) await refreshSelectedTemplate();
-      else await loadCurrentTemplate(currentId);
+      if (deletingImagesRef.current.has(imageId)) return;
+      deletingImagesRef.current.add(imageId);
+      const targetTemplateId = currentId;
+      let effect = null;
+      try {
+        const msg = isGlobal
+          ? t('dialogs.deleteImageGlobally')
+          : t('dialogs.removeImageFromTemplate');
+        if (!(await confirmAction(msg))) return;
+        try { effect = prepareImageDissolve?.(imageId); } catch (_) { /* Visual fallback only. */ }
+        await fetchAPI(
+          `/images/${encodeURIComponent(imageId)}?is_global=${isGlobal}&template_id=${encodeURIComponent(targetTemplateId)}`,
+          { method: 'DELETE' }
+        );
+        try { await effect?.play(); } catch (_) { /* Successful deletion still refreshes. */ }
+        if (isGlobal) await refreshSelectedTemplate();
+        else await loadCurrentTemplate(targetTemplateId);
+      } catch (error) {
+        showToast(getErrorMessage(error, 'errors.deleteFailed'), 'error');
+      } finally {
+        effect?.dispose();
+        deletingImagesRef.current.delete(imageId);
+      }
     };
     const handleUpload = async (e) => {
       const file = e.target.files?.[0];

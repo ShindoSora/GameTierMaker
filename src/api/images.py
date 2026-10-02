@@ -240,6 +240,26 @@ async def get_thumbnail(image_id: str):
     raise HTTPException(404, "缩略图不存在")
 
 
+@router.get("/{image_id}/original")
+async def get_original_image(image_id: str):
+    """Serve a saved original without creating or refreshing thumbnails."""
+    image_id = validate_image_id(image_id)
+
+    def resolve_original():
+        mgr = get_manager()
+        with mgr._save_lock:
+            meta = mgr.project_data.shared_images_meta.get(image_id)
+            if meta is None or meta.is_remote:
+                raise HTTPException(404, "本地原图不存在")
+            meta_path = meta.path
+        return get_image_svc().get_full_image_path(meta_path)
+
+    path = await run_in_threadpool(resolve_original)
+    if os.path.isfile(path):
+        return FileResponse(path)
+    raise HTTPException(404, "本地原图不存在")
+
+
 @router.get("/{image_id}/info")
 def get_image_info(image_id: str):
     """获取图片元数据"""

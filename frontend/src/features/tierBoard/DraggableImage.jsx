@@ -9,7 +9,7 @@
     const meta = imagesMeta && imagesMeta[imageId];
     const isRemote = meta && meta.is_remote;
     const isRemoteOk = isRemote && !meta.remote_failed;
-    const src = isRemote ? meta.path : `/api/images/${encodeURIComponent(imageId)}/thumbnail`;
+    const src = isRemote ? meta.path : `/api/images/${encodeURIComponent(imageId)}/original`;
     const style = isRemoteOk
       ? {
           opacity: 0.7,
@@ -51,6 +51,7 @@
       <>
         <div
           className="drag-image"
+          data-image-id={imageId}
           draggable={!isRemote}
           style={style}
           onDragStart={handleDragStart}

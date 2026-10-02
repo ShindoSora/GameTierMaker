@@ -1,9 +1,10 @@
 (() => {
   'use strict';
 
-  const { useState } = React;
+  const { useState, useRef, useEffect, useLayoutEffect } = React;
   const { t } = window.GameTierI18n;
-  const { storeDragEvent, calculateInsertIndex, dragState, clearDragEvent, DraggableImage } =
+  const { storeDragEvent, calculateInsertIndex, dragState, clearDragEvent, DraggableImage,
+    getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } =
     window.GameTierApp;
   // Colors identify the source, independent of group order or account nickname.
   const accountPlatforms = [
@@ -40,7 +41,9 @@
     expandedView = false,
     closing = false,
     overlayStyle,
-    onAnimationEnd,
+    originRect,
+    sourceListRef,
+    onCloseComplete,
     onDelete,
     onClear,
     onDropToGroup,
@@ -50,6 +53,87 @@
   }) {
     const [dragOver, setDragOver] = useState(false);
     const [insertIndex, setInsertIndex] = useState(-1);
+    const [phase, setPhase] = useState(expandedView ? 'opening' : 'card');
+    const overlayRef = useRef(null);
+    const contentRef = useRef(null);
+    const motionRef = useRef(null);
+    const contentMotionRef = useRef(null);
+    const listMotionRef = useRef(null);
+    const closingRef = useRef(closing);
+    const completeRef = useRef(onCloseComplete);
+    closingRef.current = closing;
+    completeRef.current = onCloseComplete;
+    const cancelMotion = () => {
+      if (motionRef.current) {
+        motionRef.current.onfinish = null;
+        motionRef.current.cancel();
+        motionRef.current = null;
+      }
+      contentMotionRef.current?.cancel();
+      contentMotionRef.current = null;
+      listMotionRef.current?.cancel();
+      listMotionRef.current = null;
+    };
+    useEffect(() => () => cancelMotion(), []);
+    useEffect(() => {
+      if (!expandedView) return;
+      const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+      const onChange = () => {
+        if (!media?.matches) return;
+        cancelMotion();
+        if (closingRef.current) completeRef.current?.(group.id);
+        else setPhase('open');
+      };
+      media?.addEventListener?.('change', onChange);
+      return () => media?.removeEventListener?.('change', onChange);
+    }, [expandedView, group.id]);
+    useLayoutEffect(() => {
+      if (!expandedView) return;
+      const overlay = overlayRef.current, content = contentRef.current;
+      const moving = motionRef.current && ['running', 'pending'].includes(motionRef.current.playState);
+      const current = moving && overlay ? getComputedStyle(overlay) : null;
+      const from = current ? { transform: current.transform, borderRadius: current.borderRadius, opacity: 1 } : null;
+      const contentOpacity = moving && content ? Number(getComputedStyle(content).opacity) : closing ? 1 : 0;
+      const list = sourceListRef?.current;
+      const listOpacity = moving && list ? Number(getComputedStyle(list).opacity) : closing ? 0 : 1;
+      cancelMotion();
+      if (!overlay?.animate || !content?.animate || !originRect ||
+          window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        setPhase(closing ? 'closed' : 'open');
+        if (closing) completeRef.current?.(group.id);
+        return;
+      }
+      const fullRect = overlay.getBoundingClientRect();
+      const hostRect = overlay.parentElement.getBoundingClientRect();
+      const target = { left: hostRect.left + originRect.left, top: hostRect.top + originRect.top,
+        width: originRect.width, height: originRect.height };
+      const origin = getIslandOrigin(fullRect, target, originRect.radius || 12);
+      const full = { transform: 'none', borderRadius: getComputedStyle(overlay).borderRadius, opacity: 1 };
+      const options = { duration: ISLAND_DURATION, easing: closing ? ISLAND_CLOSE_EASING : ISLAND_OPEN_EASING, fill: 'both' };
+      setPhase(closing ? 'closing' : 'opening');
+      const motion = overlay.animate(closing
+        ? [from || full, { opacity: 1, offset: 0.8 }, { ...origin, opacity: 0 }]
+        : [from || origin, full], options);
+      motionRef.current = motion;
+      contentMotionRef.current = content.animate(closing
+        ? [{ opacity: contentOpacity }, { opacity: 0, offset: 0.3 }, { opacity: 0 }]
+        : [{ opacity: contentOpacity }, { opacity: contentOpacity, offset: 0.2 }, { opacity: 1 }],
+      { ...options, easing: 'linear' });
+      if (list?.animate) {
+        listMotionRef.current = list.animate(closing
+          ? [{ opacity: listOpacity }, { opacity: listOpacity, offset: 0.55 }, { opacity: 1 }]
+          : [{ opacity: listOpacity }, { opacity: 0, offset: 0.25 }, { opacity: 0 }],
+        { ...options, easing: 'linear' });
+      }
+      motion.onfinish = () => {
+        if (motionRef.current !== motion) return;
+        setPhase(closing ? 'closed' : 'open');
+        if (closing) completeRef.current?.(group.id);
+      };
+    }, [expandedView, closing, originRect]);
+    useLayoutEffect(() => {
+      if (phase === 'open' && motionRef.current?.playState === 'finished') cancelMotion();
+    }, [phase]);
     const handleDragOver = (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -132,11 +216,14 @@
     if (expandedView) {
       return (
         <div
-          className={`library-group-overlay ${closing ? 'closing' : ''}`}
+          ref={overlayRef}
+          className={`library-group-overlay group-island-overlay ${closing ? 'closing' : ''}`}
+          data-group-state={phase}
+          data-library-group-id={group.id}
           style={{ '--group-accent': getLibraryGroupColor(group), ...overlayStyle }}
-          onAnimationEnd={onAnimationEnd}
           onClick={onClose}
         >
+          <div ref={contentRef} className="library-group-overlay-content">
           <div className="library-group-overlay-header" onClick={(e) => e.stopPropagation()}>
             <span className="library-group-overlay-title">{groupTitle}</span>
             <span className="library-group-overlay-count">({group.image_ids.length})</span>
@@ -159,11 +246,12 @@
           >
             {renderWithIndicator()}
           </div>
+          </div>
         </div>
       );
     }
     return (
-      <div className="library-group-item" style={{ '--group-accent': getLibraryGroupColor(group) }}>
+      <div className="library-group-item" data-library-group-id={group.id} style={{ '--group-accent': getLibraryGroupColor(group) }}>
         <div className="collapse-header" onClick={(e) => onOpen?.(e, group)}>
           <span
             style={{

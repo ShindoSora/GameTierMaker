@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { useEffect } = React;
+  const { useEffect, useRef } = React;
   const { t } = window.GameTierI18n;
   const {
     useDialogs,
@@ -22,6 +22,7 @@
     useNintendoAccount,
     useImageBackfill,
     useStorageActions,
+    useIslandPanel,
     clearRefreshNotice,
     RefreshOverlay,
     ConfirmDialog,
@@ -129,16 +130,21 @@
       loadCurrentTemplate: (...args) => templatesModel.loadCurrentTemplate(...args),
       currentId: templatesModel.currentId,
     });
+    const settingsAnchorRef = useRef(null), logAnchorRef = useRef(null), logToolbarRef = useRef(null);
+    const settingsIsland = useIslandPanel({ open: preferencesModel.showSettings,
+      width: preferencesModel.settingsWidth, anchorRef: settingsAnchorRef });
+    const logIsland = useIslandPanel({ open: logsModel.logOpen,
+      width: logsModel.logWidth, anchorRef: logAnchorRef, fallbackRef: logToolbarRef });
     useEffect(() => {
       const overlayWidth =
-        (logsModel.logOpen ? logsModel.logWidth : 0) +
-        (preferencesModel.showSettings ? preferencesModel.settingsWidth : 0);
+        (logIsland.visible ? logsModel.logWidth : 0) +
+        (settingsIsland.visible ? preferencesModel.settingsWidth : 0);
       document.documentElement.style.setProperty('--right-overlay-width', `${overlayWidth}px`);
       return () => document.documentElement.style.removeProperty('--right-overlay-width');
     }, [
-      logsModel.logOpen,
+      logIsland.visible,
       logsModel.logWidth,
-      preferencesModel.showSettings,
+      settingsIsland.visible,
       preferencesModel.settingsWidth,
     ]);
     useEffect(() => {
@@ -208,7 +214,7 @@
           alignItems: 'center',
           justifyContent: 'center',
           background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(4px)',
+          backdropFilter: 'none',
         }}
       >
         <div
@@ -271,6 +277,9 @@
               backfillModel={backfillModel}
               settingsModel={settingsModel}
               logsModel={logsModel}
+              settingsAnchorRef={settingsAnchorRef}
+              logAnchorRef={logAnchorRef}
+              logToolbarRef={logToolbarRef}
             />
 
             {/* Tier List */}
@@ -282,12 +291,16 @@
           </div>
         </div>
 
-        {logsModel.logOpen && (
+        {logIsland.visible && (
           <LogSidebar
+            island={logIsland}
             width={logsModel.logWidth}
             entries={logsModel.logEntries}
             connection={logsModel.logConnection}
             sessionId={logsModel.logSessionId}
+            source={logsModel.logSource}
+            sourceCounts={logsModel.logSourceCounts}
+            onSourceChange={logsModel.setLogSource}
             onResize={logsModel.handleLogResize}
             onClose={() => logsModel.setLogOpen(false)}
             onClear={logsModel.handleClearLogs}
@@ -298,6 +311,9 @@
         {/* Settings Sidebar — right overlay */}
         {
           <SettingsPanel
+            island={settingsIsland}
+            logVisible={logIsland.visible}
+            logAnchorRef={logAnchorRef}
             preferencesModel={preferencesModel}
             logsModel={logsModel}
             settingsModel={settingsModel}

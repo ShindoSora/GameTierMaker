@@ -25,8 +25,11 @@ DEFAULT_UI_PREFERENCES = {
     "settings_open": False,
     "settings_width": 500,
     "settings_active_section": "search_settings",
+    "liquid_glass_enabled": True,
+    "liquid_glass_transparency": 25,
 }
 SUPPORTED_UI_SETTINGS_SECTIONS = {
+    "appearance",
     "search_settings",
     "language",
     "steam_accounts",
@@ -316,6 +319,9 @@ class ConfigHandler:
             else DEFAULT_UI_PREFERENCES["settings_open"],
             "settings_width": bounded_int("settings_width", 320, 900),
             "settings_active_section": section,
+            "liquid_glass_enabled": raw.get("liquid_glass_enabled", True)
+            if isinstance(raw.get("liquid_glass_enabled", True), bool) else True,
+            "liquid_glass_transparency": bounded_int("liquid_glass_transparency", 0, 80),
         }
 
     @staticmethod

@@ -14,6 +14,8 @@
     const uiPreferencesRef = useRef(null);
     if (!uiPreferencesRef.current) uiPreferencesRef.current = readUiPreferences();
     const initialUiPreferences = uiPreferencesRef.current;
+    const [liquidGlassEnabled, setLiquidGlassEnabled] = useState(initialUiPreferences.liquidGlassEnabled);
+    const [liquidGlassTransparency, setLiquidGlassTransparency] = useState(initialUiPreferences.liquidGlassTransparency);
     const [libraryOpen, setLibraryOpen] = useState(initialUiPreferences.libraryOpen);
     const [libraryWidth, setLibraryWidth] = useState(initialUiPreferences.libraryWidth);
     const [refreshing, setRefreshing] = useState(hasRefreshNotice);
@@ -30,6 +32,8 @@
     );
     const [settingsWidth, setSettingsWidth] = useState(initialUiPreferences.settingsWidth);
     const getCurrentUiPreferences = () => ({
+      liquidGlassEnabled,
+      liquidGlassTransparency,
       libraryOpen,
       libraryWidth,
       settingsOpen: showSettings,
@@ -37,6 +41,8 @@
       settingsActiveSection,
     });
     const applyUiPreferences = (preferences) => {
+      setLiquidGlassEnabled(preferences.liquidGlassEnabled);
+      setLiquidGlassTransparency(preferences.liquidGlassTransparency);
       setLibraryOpen(preferences.libraryOpen);
       setLibraryWidth(preferences.libraryWidth);
       setShowSettings(preferences.settingsOpen);
@@ -44,6 +50,8 @@
       setSettingsActiveSection(preferences.settingsActiveSection);
     };
     const toServerUiPreferences = (preferences) => ({
+      liquid_glass_enabled: preferences.liquidGlassEnabled,
+      liquid_glass_transparency: preferences.liquidGlassTransparency,
       library_open: preferences.libraryOpen,
       library_width: preferences.libraryWidth,
       settings_open: preferences.settingsOpen,
@@ -74,6 +82,8 @@
       try {
         const saved = await fetchAPI('/settings/ui-preferences');
         const preferences = normalizeUiPreferences({
+          liquidGlassEnabled: saved?.liquid_glass_enabled,
+          liquidGlassTransparency: saved?.liquid_glass_transparency,
           libraryOpen: saved?.library_open,
           libraryWidth: saved?.library_width,
           settingsOpen: saved?.settings_open,
@@ -93,6 +103,11 @@
       localStorage.setItem('theme', theme);
     }, [theme]);
     useEffect(() => {
+      const root = document.documentElement;
+      root.setAttribute('data-liquid-glass', liquidGlassEnabled ? 'on' : 'off');
+      root.style.setProperty('--liquid-glass-alpha', String(1 - liquidGlassTransparency / 100));
+    }, [liquidGlassEnabled, liquidGlassTransparency]);
+    useEffect(() => {
       const preferences = getCurrentUiPreferences();
       writeUiPreferences(preferences);
       if (runtimeMode !== 'desktop' || !desktopUiPreferencesLoadedRef.current) return undefined;
@@ -108,6 +123,8 @@
         }
       };
     }, [
+      liquidGlassEnabled,
+      liquidGlassTransparency,
       libraryOpen,
       libraryWidth,
       showSettings,
@@ -140,6 +157,10 @@
       });
     };
     return {
+      liquidGlassEnabled,
+      setLiquidGlassEnabled,
+      liquidGlassTransparency,
+      setLiquidGlassTransparency,
       initialUiPreferences,
       libraryOpen,
       setLibraryOpen,

@@ -279,6 +279,8 @@ class UiPreferencesRequest(BaseModel):
     settings_open: bool = False
     settings_width: int = 500
     settings_active_section: str = "search_settings"
+    liquid_glass_enabled: bool = True
+    liquid_glass_transparency: int = 25
 
 
 @router.get("/language")
@@ -311,6 +313,8 @@ def update_ui_preferences(req: UiPreferencesRequest):
         "settings_open": req.settings_open,
         "settings_width": req.settings_width,
         "settings_active_section": req.settings_active_section,
+        "liquid_glass_enabled": req.liquid_glass_enabled,
+        "liquid_glass_transparency": req.liquid_glass_transparency,
     })
 
 

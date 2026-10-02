@@ -10,12 +10,25 @@
       const saved = Number(localStorage.getItem('log-panel-width'));
       return Number.isFinite(saved) && saved >= 280 ? Math.min(saved, 640) : 340;
     });
-    const [logEntries, setLogEntries] = useState([]);
-    const [logConnection, setLogConnection] = useState('connecting');
-    const [logSessionId, setLogSessionId] = useState('');
+    const [logSource, setLogSource] = useState(() =>
+      localStorage.getItem('log-panel-source') === 'console' ? 'console' : 'application'
+    );
+    const [entriesBySource, setEntriesBySource] = useState({ application: [], console: [] });
+    const [connections, setConnections] = useState({ application: 'connecting', console: 'connecting' });
+    const [sessionIds, setSessionIds] = useState({ application: '', console: '' });
+    const logEntries = entriesBySource[logSource];
+    const logConnection = connections[logSource];
+    const logSessionId = sessionIds[logSource];
     const [unreadLogErrors, setUnreadLogErrors] = useState(0);
     const logOpenRef = useRef(logOpen);
-    const lastLogIdRef = useRef(0);
+    const consoleSupportedRef = useRef(false);
+    const streamStateRef = useRef({
+      application: { lastId: 0, sessionId: '' },
+      console: { lastId: 0, sessionId: '' },
+    });
+    useEffect(() => {
+      localStorage.setItem('log-panel-source', logSource);
+    }, [logSource]);
     useEffect(() => {
       logOpenRef.current = logOpen;
       localStorage.setItem('log-panel-open', String(logOpen));
@@ -31,57 +44,96 @@
     }, []);
     useEffect(() => {
       let disposed = false;
-      const appendEntry = (entry) => {
+      const sources = {};
+      const setConnection = (name, value) => {
+        if (!disposed) setConnections((previous) => ({ ...previous, [name]: value }));
+      };
+      const acceptSession = (name, sessionId) => {
+        const state = streamStateRef.current[name];
+        if (!sessionId || state.sessionId === sessionId) return;
+        state.sessionId = sessionId;
+        state.lastId = 0;
+        setSessionIds((previous) => ({ ...previous, [name]: sessionId }));
+        setEntriesBySource((previous) => ({ ...previous, [name]: [] }));
+        if (name === 'application') setUnreadLogErrors(0);
+      };
+      const appendEntry = (name, entry) => {
+        if (entry.source && entry.source !== name) return;
+        if (name === 'console' && entry.source !== 'console') return;
+        if (name === 'console') consoleSupportedRef.current = true;
+        acceptSession(name, entry.session_id);
+        const state = streamStateRef.current[name];
         const id = Number(entry.id) || 0;
-        if (id <= lastLogIdRef.current) return;
-        lastLogIdRef.current = id;
-        setLogEntries((previous) => [...previous, entry].slice(-2000));
-        if (!logOpenRef.current && (entry.level === 'ERROR' || entry.level === 'CRITICAL')) {
+        if (id <= state.lastId) return;
+        state.lastId = id;
+        setEntriesBySource((previous) => ({ ...previous, [name]: [...previous[name], entry].slice(-2000) }));
+        if (name === 'application' && !logOpenRef.current && (entry.level === 'ERROR' || entry.level === 'CRITICAL')) {
           setUnreadLogErrors((count) => count + 1);
         }
       };
-      const connect = async () => {
+      const connect = async (name) => {
         try {
-          const initial = await fetchAPI('/logs');
+          const initial = await fetchAPI(name === 'console' ? '/logs?source=console' : '/logs');
           if (disposed) return;
-          setLogSessionId(initial.session_id || '');
-          (initial.entries || []).forEach(appendEntry);
+          if (name === 'console' && initial.source !== 'console') {
+            setConnection(name, 'unavailable');
+            return;
+          }
+          if (name === 'console') consoleSupportedRef.current = true;
+          acceptSession(name, initial.session_id);
+          (initial.entries || []).forEach((entry) => appendEntry(name, entry));
         } catch (error) {
-          if (!disposed) setLogConnection('disconnected');
+          setConnection(name, 'disconnected');
         }
         if (disposed) return;
         await localSessionReady;
         if (disposed) return;
-        const source = new EventSource(`${API}/logs/stream?after=${lastLogIdRef.current}`, {
+        const state = streamStateRef.current[name];
+        const source = new EventSource(`${API}/logs/stream?after=${state.lastId}&source=${name}&session_id=${encodeURIComponent(state.sessionId)}`, {
           withCredentials: true,
         });
-        source.onopen = () => !disposed && setLogConnection('connected');
-        source.onerror = () => !disposed && setLogConnection('disconnected');
+        sources[name] = source;
+        source.onopen = () => setConnection(name, 'connected');
+        source.onerror = () => setConnection(name, 'disconnected');
+        source.addEventListener('session', (event) => {
+          if (disposed) return;
+          try {
+            const session = JSON.parse(event.data);
+            if (name === 'console' && session.source === 'console') consoleSupportedRef.current = true;
+            acceptSession(name, session.session_id);
+          } catch (error) {
+            console.error('无法解析日志会话', error);
+          }
+        });
         source.addEventListener('log', (event) => {
           if (disposed) return;
           try {
-            appendEntry(JSON.parse(event.data));
+            const entry = JSON.parse(event.data);
+            if (name === 'console' && entry.source !== 'console') {
+              consoleSupportedRef.current = false;
+              setConnection(name, 'unavailable');
+              source.close();
+              return;
+            }
+            appendEntry(name, entry);
           } catch (error) {
             console.error('无法解析实时日志', error);
           }
         });
         source.addEventListener('clear', () => {
-          if (!disposed) setLogEntries([]);
+          if (!disposed) {
+            setEntriesBySource((previous) => ({ ...previous, [name]: [] }));
+            if (name === 'application') setUnreadLogErrors(0);
+          }
         });
         return source;
       };
-      let source;
-      connect()
-        .then((value) => {
-          if (disposed) value?.close();
-          else source = value;
-        })
-        .catch(() => {
-          if (!disposed) setLogConnection('disconnected');
-        });
+      ['application', 'console'].forEach((name) => {
+        connect(name).catch(() => setConnection(name, 'disconnected'));
+      });
       return () => {
         disposed = true;
-        if (source) source.close();
+        Object.values(sources).forEach((source) => source.close());
       };
     }, []);
     const handleLogResize = (event) => {
@@ -105,7 +157,7 @@
         return;
       }
       const text = logEntries
-        .map((entry) => `${entry.timestamp} - ${entry.logger} - ${entry.level} - ${entry.message}`)
+        .map((entry) => logSource === 'console' ? entry.message : `${entry.timestamp} - ${entry.logger} - ${entry.level} - ${entry.message}`)
         .join('\n');
       try {
         await navigator.clipboard.writeText(text);
@@ -115,13 +167,20 @@
       }
     };
     const handleClearLogs = async () => {
-      if (logEntries.length > 0 && !(await confirmAction(t('dialogs.clearSessionLogs')))) return;
+      const source = logSource;
+      if (source === 'console' && !consoleSupportedRef.current) {
+        showToast(t('logs.consoleUnavailable'));
+        return;
+      }
+      if (logEntries.length > 0 && !(await confirmAction(t('dialogs.clearLogTab', {
+        source: t(source === 'console' ? 'logs.consoleTab' : 'logs.applicationTab'),
+      })))) return;
       try {
-        await fetchAPI('/logs/clear', {
+        await fetchAPI(`/logs/clear?source=${source}`, {
           method: 'POST',
         });
-        setLogEntries([]);
-        setUnreadLogErrors(0);
+        setEntriesBySource((previous) => ({ ...previous, [source]: [] }));
+        if (source === 'application') setUnreadLogErrors(0);
         showToast(t('logs.cleared'), 'success');
       } catch (error) {
         showToast(t('logs.clearFailed'), 'error');
@@ -133,7 +192,7 @@
         await fetchAPI('/logs/clear-file', {
           method: 'POST',
         });
-        setLogEntries([]);
+        setEntriesBySource((previous) => ({ ...previous, application: [] }));
         setUnreadLogErrors(0);
         showToast(t('logs.fileCleared'), 'success');
       } catch (error) {
@@ -144,6 +203,9 @@
       logOpen,
       setLogOpen,
       logWidth,
+      logSource,
+      setLogSource,
+      logSourceCounts: { application: entriesBySource.application.length, console: entriesBySource.console.length },
       logEntries,
       logConnection,
       logSessionId,

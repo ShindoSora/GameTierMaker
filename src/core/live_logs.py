@@ -12,6 +12,7 @@ from datetime import datetime
 import logging
 import os
 import re
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -19,10 +20,13 @@ from pathlib import Path
 
 _SENSITIVE_VALUE_RE = re.compile(
     r"(?i)(\b(?:npsso|access[_-]?token|refresh[_-]?token|client[_-]?secret|"
-    r"bangumi[_-]?token|steam[_-]?key|api[\s_-]?key|authorization)\b"
+    r"bangumi[_-]?token|steam[_-]?key|api[\s_-]?key|authorization|password|"
+    r"session[_-]?token(?:[_-]?code)?|id[_-]?token|authorization[_-]?code)\b"
     r"\s*[\"']?\s*[:=]\s*[\"']?)([^\"',;\s}]+)"
 )
 _BEARER_TOKEN_RE = re.compile(r"(?i)(\bbearer\s+)([^\s,;]+)")
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_CONSOLE_LEVEL_RE = re.compile(r"(?:^|\s-\s)(DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL|TRACE)(?:\s*:|\s-\s)")
 
 
 def _redact_message(message: str) -> str:
@@ -40,9 +44,10 @@ class RedactingFormatter(logging.Formatter):
 class SessionLogHandler(logging.Handler):
     """Capture structured log records from this process in a bounded buffer."""
 
-    def __init__(self, max_entries: int = 2000) -> None:
+    def __init__(self, max_entries: int = 2000, source: str = "application") -> None:
         super().__init__(level=logging.DEBUG)
         self.max_entries = max(1, int(max_entries))
+        self.source = source
         self.session_id = uuid.uuid4().hex[:12]
         self.started_at = datetime.now().astimezone().isoformat(timespec="seconds")
         self._entries: deque[dict[str, object]] = deque(maxlen=self.max_entries)
@@ -67,6 +72,8 @@ class SessionLogHandler(logging.Handler):
                 "level": record.levelname,
                 "logger": record.name,
                 "message": message,
+                "source": self.source,
+                "session_id": self.session_id,
             }
             with self._lock:
                 entry["id"] = self._next_id
@@ -85,6 +92,7 @@ class SessionLogHandler(logging.Handler):
                 "clear_version": self._clear_version,
                 "entries": entries,
                 "total": len(self._entries),
+                "source": self.source,
             }
 
     def clear_session(self) -> dict[str, object]:
@@ -96,10 +104,83 @@ class SessionLogHandler(logging.Handler):
                 "session_id": self.session_id,
                 "clear_version": self._clear_version,
                 "total": 0,
+                "source": self.source,
             }
 
 
 session_log_handler = SessionLogHandler()
+console_log_handler = SessionLogHandler(source="console")
+console_log_handler.session_id = session_log_handler.session_id
+console_log_handler.started_at = session_log_handler.started_at
+
+
+class ConsoleLogStream:
+    """Mirror complete Python stdout/stderr lines without replacing terminal output."""
+
+    MAX_LINE_LENGTH = 16384
+
+    def __init__(self, original, stream_name: str, handler: SessionLogHandler) -> None:
+        self.original = original
+        self.stream_name = stream_name
+        self.handler = handler
+        self._pending = ""
+        self._truncated = False
+        self._stream_lock = threading.RLock()
+        self._capture_state = threading.local()
+
+    def write(self, text: str):
+        with self._stream_lock:
+            result = self.original.write(text)
+            if getattr(self._capture_state, "active", False):
+                return result
+            self._capture_state.active = True
+            try:
+                parts = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                for index, part in enumerate(parts):
+                    remaining = self.MAX_LINE_LENGTH - len(self._pending)
+                    self._pending += part[:remaining]
+                    self._truncated |= len(part) > remaining
+                    if index < len(parts) - 1:
+                        self._capture_line()
+            finally:
+                self._capture_state.active = False
+            return result
+
+    def _capture_line(self) -> None:
+        message = _ANSI_ESCAPE_RE.sub("", self._pending)
+        if self._truncated:
+            message += " … [truncated]"
+        self._pending = ""
+        self._truncated = False
+        if not message.strip():
+            return
+        match = _CONSOLE_LEVEL_RE.search(message)
+        level_name = match[1] if match else ("ERROR" if self.stream_name == "stderr" else "INFO")
+        level_name = {"WARN": "WARNING", "TRACE": "DEBUG"}.get(level_name, level_name)
+        record = logging.LogRecord(
+            f"console.{self.stream_name}", getattr(logging, level_name), "", 0, message, (), None
+        )
+        self.handler.handle(record)
+
+    def flush(self) -> None:
+        # Keep partial lines together, including credentials split across writes.
+        self.original.flush()
+
+    def writelines(self, lines) -> None:
+        for line in lines:
+            self.write(line)
+
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+
+def install_console_capture() -> SessionLogHandler:
+    """Install before logging/Uvicorn build stream handlers; repeat calls are safe."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name)
+        if stream is not None and not isinstance(stream, ConsoleLogStream):
+            setattr(sys, stream_name, ConsoleLogStream(stream, stream_name, console_log_handler))
+    return console_log_handler
 
 
 def clear_persistent_log_file() -> dict[str, int]:

@@ -1,0 +1,51 @@
+/* Translucent surfaces and edge highlights; backgrounds stay sharp. */
+:root {
+  --liquid-glass-alpha: .75;
+  --liquid-glass-rgb: 18, 18, 38;
+  --liquid-glass-highlight: rgba(255,255,255,.16);
+}
+[data-theme="light"] {
+  --liquid-glass-rgb: 240, 242, 248;
+  --liquid-glass-highlight: rgba(255,255,255,.65);
+}
+.settings-panel.island-panel, .log-sidebar.island-panel,
+.tier-color-dialog, .context-menu, .confirm-dialog {
+  background: linear-gradient(145deg, rgba(255,255,255,.06), transparent 55%),
+    rgba(var(--liquid-glass-rgb), var(--liquid-glass-alpha));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: inset 0 1px 0 var(--liquid-glass-highlight),
+    inset 0 -1px 0 rgba(255,255,255,.04), 0 16px 48px rgba(0,0,0,.32);
+}
+[data-theme="light"] .settings-panel.island-panel,
+[data-theme="light"] .log-sidebar.island-panel,
+[data-theme="light"] .tier-color-dialog,
+[data-theme="light"] .context-menu,
+[data-theme="light"] .confirm-dialog {
+  background: linear-gradient(145deg, rgba(255,255,255,.16), transparent 55%),
+    rgba(var(--liquid-glass-rgb), var(--liquid-glass-alpha));
+}
+.tier-color-dialog .btn, .context-menu .btn, .confirm-dialog .btn { backdrop-filter: none; }
+.settings-backdrop { backdrop-filter: none; background: rgba(0,0,0,.22); }
+[data-liquid-glass="off"] {
+  --liquid-glass-alpha: 1;
+  --liquid-glass-highlight: transparent;
+  --glass-blur: none;
+}
+[data-liquid-glass="off"] .settings-panel.island-panel,
+[data-liquid-glass="off"] .log-sidebar.island-panel,
+[data-liquid-glass="off"] .tier-color-dialog,
+[data-liquid-glass="off"] .context-menu,
+[data-liquid-glass="off"] .confirm-dialog {
+  background: rgb(var(--liquid-glass-rgb));
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.glass-toggle-row, .glass-transparency-heading {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 14px; line-height: 1.5;
+}
+.glass-toggle-row input { width: 18px; height: 18px; accent-color: var(--accent); }
+.glass-help { margin: 8px 0 24px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.glass-transparency-heading output { color: var(--accent); font-variant-numeric: tabular-nums; }
+#glass-transparency { display: block; width: 100%; margin-top: 12px; accent-color: var(--accent); }
+#glass-transparency:disabled { opacity: .45; }

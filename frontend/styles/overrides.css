@@ -40,7 +40,7 @@
 .refresh-overlay {
   position:fixed; inset:0; z-index:4500;
   display:flex; align-items:center; justify-content:center;
-  background:rgba(2,2,12,0.58); backdrop-filter:blur(6px);
+  background:rgba(2,2,12,0.58); backdrop-filter:none;
 }
 .refresh-panel {
   display:flex; flex-direction:column; align-items:center; gap:16px;
@@ -58,10 +58,10 @@
 .steam-progress-overlay {
   position: fixed; inset: 0; z-index: 3500;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.65); backdrop-filter: blur(8px);
+  background: rgba(0,0,0,0.65); backdrop-filter: none;
 }
 .steam-progress-panel {
-  background: rgba(20,20,40,0.95); backdrop-filter: blur(30px);
+  background: rgba(20,20,40,0.95); backdrop-filter: none;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: var(--radius-xl); padding: 32px 40px;
   display: flex; flex-direction: column; align-items: center; gap: 16px;
@@ -73,8 +73,10 @@
 
 /* Steam accounts list */
 .steam-account-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px; margin-bottom: 8px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+  container-type: inline-size;
+  min-width: 0;
+  padding: 10px; margin-bottom: 8px;
   background: var(--surface); backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
@@ -90,5 +92,25 @@
   border: 1px solid rgba(91,156,245,0.3); color: var(--accent-hover);
   font-size: 14px; font-weight: 700; text-transform: uppercase;
 }
-.steam-account-row .name { flex: 1; font-weight: 600; font-size: 14px; }
-.steam-account-row .actions { display: flex; gap: 6px; flex-shrink: 0; }
+.steam-account-row .name {
+  flex: 1 1 0; min-width: 0; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+  font-weight: 600; font-size: 14px;
+}
+.steam-account-row .actions {
+  display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 4px;
+  flex: 0 0 auto; margin-left: auto;
+}
+.steam-account-row .actions .btn {
+  padding: 4px 7px; white-space: nowrap;
+  justify-content: center;
+}
+.steam-account-row .name > span, .steam-account-row .name > small {
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+@container (max-width: 320px) {
+  .steam-account-row .avatar { width: 32px; height: 32px; }
+  .steam-account-row .name { font-size: 13px; }
+  .steam-account-row .actions { gap: 3px; }
+  .steam-account-row .actions .btn { padding: 4px 5px; font-size: 11px; }
+}

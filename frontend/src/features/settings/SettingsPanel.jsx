@@ -12,8 +12,12 @@
     DownloadSettings,
     StorageSettings,
     AboutSettings,
+    SettingsSectionHeading,
   } = window.GameTierApp;
   function SettingsPanel({
+    island,
+    logVisible,
+    logAnchorRef,
     preferencesModel,
     logsModel,
     settingsModel,
@@ -36,44 +40,42 @@
     const { logOpen, logWidth, setLogOpen, unreadLogErrors } = logsModel;
     const { settingsOperation } = settingsModel;
     return (
-      showSettings && (
+      (island ? island.visible : showSettings) && (
         <div
+          className="settings-overlay"
           style={{
             position: 'fixed',
             top: 0,
             left: 0,
             bottom: 0,
-            right: logOpen ? logWidth : 0,
+            right: 0,
             zIndex: 3000,
-            background: 'rgba(0,0,0,0.4)',
-            backdropFilter: 'blur(2px)',
-            transition: 'opacity 0.3s ease',
           }}
           onClick={() => {
             if (!settingsOperation) setShowSettings(false);
           }}
         >
+          <div ref={island?.backdropRef} className="settings-backdrop" />
           <div
-            className="settings-panel"
+            ref={island?.panelRef}
+            className="settings-panel island-panel"
+            data-island-state={island?.phase || 'open'}
             style={{
               position: 'absolute',
               top: 8,
-              right: 8,
+              right: (logVisible ?? logOpen) ? logWidth + 16 : 8,
               bottom: 8,
               width: settingsWidth,
               maxWidth: 'calc(100% - 16px)',
-              background: 'var(--sidebar-bg)',
-              backdropFilter: 'blur(30px)',
               border: '1px solid var(--border-strong)',
               display: 'flex',
               flexDirection: 'column',
               minWidth: 0,
               minHeight: 0,
-              boxShadow: '-8px 0 32px rgba(0,0,0,0.4)',
-              animation: 'slideInRight 0.25s cubic-bezier(0.4,0,0.2,1)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
+            <div ref={island?.contentRef} className="island-panel-content" inert={island?.phase === 'closing' ? '' : undefined}>
             {/* 左侧拖拽手柄 */}
             <div
               onMouseDown={(e) => {
@@ -131,7 +133,10 @@
               >
                 <button
                   className={`btn btn-sm ${logOpen ? 'btn-primary' : ''}`}
-                  onClick={() => setLogOpen((open) => !open)}
+                  onClick={(event) => {
+                    if (logAnchorRef) logAnchorRef.current = event.currentTarget;
+                    setLogOpen((open) => !open);
+                  }}
                 >
                   {logOpen ? t('logs.collapse') : t('logs.view')}
                   {!logOpen && unreadLogErrors > 0 && (
@@ -142,6 +147,7 @@
                   className="btn btn-icon btn-sm"
                   onClick={() => setShowSettings(false)}
                   disabled={!!settingsOperation}
+                  aria-label={t('actions.close')}
                 >
                   ✕
                 </button>
@@ -164,6 +170,7 @@
                         key: 'language',
                         label: t('settings.tabs.language'),
                       },
+                      { key: 'appearance', label: t('settings.tabs.appearance') },
                     ],
                   },
                   {
@@ -223,6 +230,26 @@
               </div>
               {/* Right content */}
               <div className="settings-content">
+                {settingsActiveSection === 'appearance' && (
+                  <div className="appearance-settings">
+                    <SettingsSectionHeading title={t('settings.tabs.appearance')} />
+                    <label className="glass-toggle-row">
+                      <span>{t('settings.glass.enabled')}</span>
+                      <input type="checkbox" checked={preferencesModel.liquidGlassEnabled}
+                        onChange={event => preferencesModel.setLiquidGlassEnabled(event.target.checked)} />
+                    </label>
+                    <p className="glass-help">{t('settings.glass.description')}</p>
+                    <div className="glass-transparency-heading">
+                      <label htmlFor="glass-transparency">{t('settings.glass.transparency')}</label>
+                      <output htmlFor="glass-transparency">{preferencesModel.liquidGlassTransparency}%</output>
+                    </div>
+                    <input id="glass-transparency" type="range" min="0" max="80" step="1"
+                      value={preferencesModel.liquidGlassTransparency}
+                      disabled={!preferencesModel.liquidGlassEnabled}
+                      onChange={event => preferencesModel.setLiquidGlassTransparency(Number(event.target.value))} />
+                    <p className="glass-help">{t('settings.glass.hint')}</p>
+                  </div>
+                )}
                 {settingsOperation && (
                   <div className="settings-operation">
                     <div className="loading-spinner" />
@@ -314,6 +341,7 @@
                   />
                 }
               </div>
+            </div>
             </div>
           </div>
         </div>

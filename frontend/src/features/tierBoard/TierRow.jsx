@@ -10,6 +10,30 @@
     DraggableImage,
     GlowCard,
   } = window.GameTierApp;
+  function getTierTheme(color) {
+    const match = String(color || '').trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+    let hex = match ? match[1] : '808080';
+    if (hex.length === 3) hex = [...hex].map((value) => value + value).join('');
+    const channels = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+    const rgba = (alpha) => `rgba(${channels.join(', ')}, ${alpha})`;
+    const labelChannels = channels.map((value) => Math.round(value * 0.88 + 255 * 0.12));
+    const luminance = labelChannels.map((value) => {
+      const channel = value / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    }).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index], 0);
+    // Explicit RGB colors also work in the PNG renderer, unlike CSS color-mix().
+    return {
+      '--tier-color': `#${hex}`,
+      '--tier-tint': rgba(0.12),
+      '--tier-faint-tint': rgba(0.025),
+      '--tier-border': rgba(0.5),
+      '--tier-divider': rgba(0.18),
+      '--tier-drag-tint': rgba(0.16),
+      '--tier-glow': rgba(0.2),
+      '--tier-label-background': `rgb(${labelChannels.join(', ')})`,
+      '--tier-label-text': luminance > 0.179 ? '#171722' : '#ffffff',
+    };
+  }
   function TierHeader({
     tier,
     onRename,
@@ -29,13 +53,12 @@
       setEditing(false);
       if (name.trim() && name !== tier.label) onRename(tier.id, name.trim());
     };
-    const fontSize = tier.label.length < 3 ? 22 : tier.label.length < 6 ? 18 : 14;
+    const fontSize = tier.label.length < 3 ? 26 : tier.label.length < 6 ? 18 : 14;
     return (
       <>
         <div
           className="tier-header"
           style={{
-            background: tier.color,
             cursor: 'grab',
           }}
           draggable={true}
@@ -50,12 +73,13 @@
           {editing ? (
             <input
               ref={inputRef}
+              className="tier-header-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={finishEdit}
               onKeyDown={(e) => e.key === 'Enter' && finishEdit()}
               style={{
-                width: '70px',
+                width: '100%',
                 textAlign: 'center',
                 background: 'rgba(255,255,255,0.85)',
                 border: 'none',
@@ -68,6 +92,7 @@
             />
           ) : (
             <span
+              className="tier-header-label"
               style={{
                 fontSize,
               }}
@@ -192,11 +217,11 @@
     };
     return (
       <GlowCard
-        className="tier-row-container"
+        className={`tier-row-container ${dragOver ? 'image-drag-over' : ''}`}
         style={{
-          borderTop: rowDragOver && rowDropBefore ? '2px solid var(--accent)' : undefined,
-          borderBottom: rowDragOver && !rowDropBefore ? '2px solid var(--accent)' : undefined,
-          transition: 'border 0.15s ease, opacity 0.2s ease',
+          ...getTierTheme(tier.color),
+          borderTop: rowDragOver && rowDropBefore ? '2px solid var(--tier-color)' : undefined,
+          borderBottom: rowDragOver && !rowDropBefore ? '2px solid var(--tier-color)' : undefined,
           opacity: rowDragOver && rowDropBefore ? 0.85 : 1,
         }}
         onDragOver={handleRowDragOver}
@@ -227,6 +252,7 @@
     );
   }
   Object.assign(window.GameTierApp, {
+    getTierTheme,
     TierHeader,
     TierRow,
   });
