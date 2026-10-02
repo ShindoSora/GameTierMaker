@@ -10,7 +10,6 @@ Game Tier Maker 是一个在本地运行的游戏 Tier List 制作工具
 
 您可以将本地的图片导入到程序中
 
-Nintendo 账号使用游玩记录导入：在设置中打开 Nintendo 登录页，登录后将地址栏中的 `npf...://auth` 回调链接粘贴回程序，再预览并选择要导入的游戏。Nintendo 的游玩记录接口属于未公开接口，记录可能延迟，当前集成以真实账号联调结果为准；绑定说明和开发契约见 [NINTENDO_IMPORT_DEV.md](aimd/NINTENDO_IMPORT_DEV.md)。
 
 程序可以新建多个排序模板，右键等级行可以更改颜色，双击可以改名
 <!-- <img width="1573" height="1013" alt="image" src="https://github.com/user-attachments/assets/58bbc950-6918-4c82-9c9e-028d371b753e" /> -->
