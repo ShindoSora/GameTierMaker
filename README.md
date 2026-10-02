@@ -45,8 +45,6 @@ python -m venv .venv
 
 访问 http://localhost:8000 查看应用
 
-前端已按组件与功能模块拆分，入口为 `frontend/index.html`，无需额外前端构建即可运行。目录职责、模块加载规则和可选回归测试见 [前端开发约定](frontend/README.md)，拆分方案与验收记录见 [FRONTEND_REFACTOR_PLAN.md](FRONTEND_REFACTOR_PLAN.md)。
-
 ## Windows exe
 
 先安装构建依赖：
