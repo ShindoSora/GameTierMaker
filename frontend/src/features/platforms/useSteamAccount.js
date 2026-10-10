@@ -15,6 +15,7 @@
     const [steamAccounts, setSteamAccounts] = useState({});
     const steamImportPollTokenRef = useRef(0);
     const handledSteamImportsRef = useRef(new Set());
+    const processingSteamImportsRef = useRef(new Map());
     const handleSteamImportComplete = async (result) => {
       const operationId = String(result?.operation_id || '');
       let expectedOperationId = '';
@@ -25,32 +26,41 @@
       }
       // Ignore unsolicited or stale callback messages. The polling endpoint is
       // protected by the HttpOnly local-session cookie as a second check.
-      if (!operationId || !expectedOperationId || operationId !== expectedOperationId) return;
-      if (operationId && handledSteamImportsRef.current.has(operationId)) return;
-      if (operationId) handledSteamImportsRef.current.add(operationId);
-      try {
-        if (expectedOperationId === operationId) {
-          sessionStorage.removeItem('steam-import-operation');
+      if (!operationId) return false;
+      if (handledSteamImportsRef.current.has(operationId)) return true;
+      if (!expectedOperationId || operationId !== expectedOperationId) return false;
+      if (processingSteamImportsRef.current.has(operationId)) {
+        return processingSteamImportsRef.current.get(operationId);
+      }
+      const completion = (async () => {
+        const { currentId: activeTemplateId, loadCurrentTemplate } = getCurrentTemplate();
+        if (activeTemplateId) await loadCurrentTemplate(activeTemplateId);
+        await loadSteamAccounts();
+        runBackfill('steam');
+        handledSteamImportsRef.current.add(operationId);
+        try {
+          if (sessionStorage.getItem('steam-import-operation') === operationId) {
+            sessionStorage.removeItem('steam-import-operation');
+          }
+        } catch (error) {
+          /* session storage is optional */
         }
-      } catch (error) {
-        /* session storage is optional */
+        const total = Number(result?.total);
+        showToast(
+          Number.isFinite(total)
+            ? t('steam.loadedCovers', { count: total })
+            : t('steam.coversLoaded'),
+          'success'
+        );
+        showToast(t('library.dragDisabledWhileDownloading'), '');
+        return true;
+      })();
+      processingSteamImportsRef.current.set(operationId, completion);
+      try {
+        return await completion;
+      } finally {
+        processingSteamImportsRef.current.delete(operationId);
       }
-      const { currentId: activeTemplateId, loadCurrentTemplate } = getCurrentTemplate();
-      if (activeTemplateId) {
-        await loadCurrentTemplate(activeTemplateId);
-      }
-      await loadSteamAccounts();
-      const total = Number(result?.total);
-      showToast(
-        Number.isFinite(total)
-          ? t('steam.loadedCovers', {
-              count: total,
-            })
-          : t('steam.coversLoaded'),
-        'success'
-      );
-      showToast(t('library.dragDisabledWhileDownloading'), '');
-      runBackfill('steam');
     };
     const monitorSteamImport = async (operationId) => {
       if (!operationId) return;
@@ -65,10 +75,8 @@
             `/settings/steam/import-status/${encodeURIComponent(operationId)}`
           );
           if (pollToken !== steamImportPollTokenRef.current) return;
-          requestFailures = 0;
           if (result.status === 'complete') {
-            await handleSteamImportComplete(result);
-            return;
+            if (await handleSteamImportComplete(result)) return;
           }
           if (result.status === 'error') {
             try {
@@ -80,6 +88,7 @@
             await loadSteamAccounts();
             return;
           }
+          requestFailures = 0;
         } catch (error) {
           requestFailures += 1;
           if (requestFailures >= 5) {
@@ -101,7 +110,11 @@
       const handler = async (event) => {
         if (event.origin !== window.location.origin) return;
         if (!event.data || event.data.type !== 'steam-import-done') return;
-        await handleSteamImportComplete(event.data);
+        try {
+          await handleSteamImportComplete(event.data);
+        } catch (error) {
+          showToast(getErrorMessage(error, 'errors.requestFailed'), 'error');
+        }
       };
       window.addEventListener('message', handler);
       return () => window.removeEventListener('message', handler);

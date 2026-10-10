@@ -4,6 +4,6 @@
 @import url("./layout.css?v=20261002-no-blur");
 @import url("./components.css?v=20261002-no-blur");
 @import url("./logs.css?v=20261002-no-blur");
-@import url("./settings.css?v=20261002-no-blur");
+@import url("./settings.css?v=20261010-pill-hide-fix");
 @import url("./overrides.css?v=20261002-account-inline");
-@import url("./glass.css?v=20261002-glass-dialogs");
+@import url("./glass.css?v=20261009-nav-seam");

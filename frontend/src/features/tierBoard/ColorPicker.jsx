@@ -16,14 +16,12 @@
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(0,0,0,0.5)',
           }}
           onClick={() => setColorPicker(null)}
         >
           <div
             className="tier-color-dialog"
             style={{
-              border: '1px solid var(--border-strong)',
               borderRadius: 'var(--radius-lg)',
               padding: 24,
               width: 320,

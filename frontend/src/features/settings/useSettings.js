@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { useState } = React;
+  const { useState, useRef } = React;
   const { getErrorMessage, t } = window.GameTierI18n;
   const { fetchAPI, showToast, deepGet } = window.GameTierApp;
   function useSettings({
@@ -17,6 +17,9 @@
     const [steamKey, setSteamKey] = useState('');
     const [steamgriddbApiKey, setSteamgriddbApiKey] = useState('');
     const [settingsBaseline, setSettingsBaseline] = useState(null);
+    const [settingsLoadState, setSettingsLoadState] = useState('idle');
+    const settingsLoadedRef = useRef(false);
+    const settingsLoadSequenceRef = useRef(0);
     const [openSourceLicenses, setOpenSourceLicenses] = useState([]);
     const [settingsOperation, setSettingsOperation] = useState(null);
     const [psnNpsso, setPsnNpsso] = useState('');
@@ -34,8 +37,12 @@
       }
     };
     const handleOpenSettings = async () => {
+      const sequence = ++settingsLoadSequenceRef.current;
+      settingsLoadedRef.current = false;
+      setSettingsLoadState('loading');
       try {
         const cfg = await fetchAPI('/settings');
+        if (sequence !== settingsLoadSequenceRef.current) return;
         setIgdbClientId(deepGet(cfg, 'client_id') || '');
         setIgdbClientSecret('');
         setBangumiUserAgent(deepGet(cfg, 'bangumi_user_agent') || '');
@@ -52,8 +59,12 @@
         });
         setSecretTouched({});
         setPsnOnlineId(deepGet(cfg, 'psn_online_id') || '');
+        settingsLoadedRef.current = true;
+        setSettingsLoadState('ready');
       } catch (e) {
-        /* use defaults */
+        if (sequence !== settingsLoadSequenceRef.current) return;
+        setSettingsLoadState('error');
+        showToast(t('settings.loadFailed'), 'error');
       }
       loadDownloadSettings();
       setShowSettings(true);
@@ -250,6 +261,10 @@
       }
     };
     const handleSaveAllSettings = async () => {
+      if (!settingsLoadedRef.current || !settingsBaseline) {
+        showToast(t('settings.loadFailed'), 'error');
+        return;
+      }
       const baseline = settingsBaseline || {};
       const dirty = {
         igdb:
@@ -372,6 +387,7 @@
       setPsnMinPlayDuration,
       loadOpenSourceLicenses,
       handleOpenSettings,
+      settingsLoadState,
       revealSettingSecret,
       updateSettingSecret,
       handleSaveSteamKeyFromPlatform,

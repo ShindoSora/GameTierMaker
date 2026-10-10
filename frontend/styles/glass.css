@@ -1,45 +1,167 @@
-/* Translucent surfaces and edge highlights; backgrounds stay sharp. */
+/* Clear glass: full optics at rest, restrained reflections while the shell transforms. */
 :root {
   --liquid-glass-alpha: .75;
-  --liquid-glass-rgb: 18, 18, 38;
-  --liquid-glass-highlight: rgba(255,255,255,.16);
+  --liquid-glass-rgb: 26, 30, 44;
+  --glass-reflection-rgb: 220, 234, 255;
+  --glass-rim-light: rgba(238,246,255,.42);
+  --glass-rim-shadow: rgba(3,6,16,.36);
+  --glass-rim-width: 3px;
+  --glass-sheen-strength: .045;
+  --glass-light-x: 35%;
+  --glass-light-y: 15%;
+  --glass-light-angle: 135deg;
+  --glass-presence: 0;
 }
 [data-theme="light"] {
-  --liquid-glass-rgb: 240, 242, 248;
-  --liquid-glass-highlight: rgba(255,255,255,.65);
+  --liquid-glass-rgb: 245, 248, 255;
+  --glass-reflection-rgb: 255, 255, 255;
+  --glass-rim-light: rgba(255,255,255,.8);
+  --glass-rim-shadow: rgba(59,76,112,.20);
+  --glass-sheen-strength: .09;
 }
 .settings-panel.island-panel, .log-sidebar.island-panel,
 .tier-color-dialog, .context-menu, .confirm-dialog {
-  background: linear-gradient(145deg, rgba(255,255,255,.06), transparent 55%),
+  isolation: isolate;
+  border: 1px solid rgba(180,202,235,.12);
+  background: linear-gradient(145deg, rgba(255,255,255,.025), transparent 60%),
     rgba(var(--liquid-glass-rgb), var(--liquid-glass-alpha));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  box-shadow: inset 0 1px 0 var(--liquid-glass-highlight),
-    inset 0 -1px 0 rgba(255,255,255,.04), 0 16px 48px rgba(0,0,0,.32);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.14),
+    inset 0 -2px 4px rgba(0,0,0,.12), 0 12px 40px rgba(0,0,0,.22);
 }
-[data-theme="light"] .settings-panel.island-panel,
-[data-theme="light"] .log-sidebar.island-panel,
-[data-theme="light"] .tier-color-dialog,
-[data-theme="light"] .context-menu,
-[data-theme="light"] .confirm-dialog {
-  background: linear-gradient(145deg, rgba(255,255,255,.16), transparent 55%),
+[data-theme="light"] :is(.settings-panel.island-panel, .log-sidebar.island-panel,
+  .tier-color-dialog, .context-menu, .confirm-dialog) {
+  background: linear-gradient(145deg, rgba(255,255,255,.08), transparent 60%),
     rgba(var(--liquid-glass-rgb), var(--liquid-glass-alpha));
+  border-color: rgba(150,170,205,.22);
+}
+.tier-color-dialog, .context-menu { position: relative; }
+/* The context menu's viewport coordinates must remain fixed. */
+.context-menu { position: fixed; }
+.confirm-dialog { position: relative; }
+.settings-nav, .glass-range-surface { position: relative; isolation: isolate; }
+.settings-nav {
+  --glass-rim-width: 2px;
+  --glass-sheen-strength: .025;
+  /* Attached navigation shares the outer panel's corners, not a second inner rim. */
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.035), transparent 55%),
+    rgba(var(--liquid-glass-rgb), calc(var(--liquid-glass-alpha) * .28));
+  box-shadow: inset -1px 0 0 rgba(255,255,255,.07);
+}
+.glass-range-surface {
+  --glass-rim-width: 2px;
+  --glass-sheen-strength: .08;
+  padding: 2px 12px; margin-top: 12px; border-radius: 18px;
+  background: rgba(var(--glass-reflection-rgb), calc(.025 + (1 - var(--liquid-glass-alpha)) * .08));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -1px 2px rgba(0,0,0,.12);
+}
+:is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::before,
+:is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+}
+/* The masked rim and displacement are only composited at rest. */
+:is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::before {
+  z-index: 3; padding: var(--glass-rim-width);
+  background: conic-gradient(from var(--glass-light-angle) at var(--glass-light-x) var(--glass-light-y),
+    transparent 0deg, var(--glass-rim-light) 35deg, rgba(145,192,255,.09) 90deg,
+    var(--glass-rim-shadow) 145deg, transparent 205deg, rgba(255,255,255,.30) 265deg,
+    var(--glass-rim-shadow) 320deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: calc(.52 + var(--glass-presence) * .20);
+  transition: opacity 240ms ease;
+}
+@supports (backdrop-filter: url("#liquid-glass-edge-refraction")) {
+  :is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+    .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::before {
+    backdrop-filter: url("#liquid-glass-edge-refraction");
+  }
+}
+/* Keep the navigation's optical edge on its separator; the header owns the top edge. */
+.settings-nav::before { clip-path: inset(2px 0 2px calc(100% - 2px)); }
+:is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::after {
+  z-index: 0;
+  background: radial-gradient(ellipse farthest-corner at var(--glass-light-x) var(--glass-light-y),
+    rgba(var(--glass-reflection-rgb), var(--glass-sheen-strength)), transparent 57%),
+    linear-gradient(118deg, rgba(255,255,255,.018), transparent 42%, rgba(176,206,255,.015));
+  opacity: calc(.3 + var(--glass-presence) * .7);
+  transition: opacity 280ms ease;
+}
+:is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface) > * {
+  position: relative; z-index: 1;
+}
+/* Transformed mask/backdrop layers can flash a full-surface fan in WebView.
+   Keep the moving rim unmasked and inset-only; restore refraction when phase returns to open. */
+:is(.island-panel[data-island-state="opening"], .island-panel[data-island-state="closing"])::before,
+:is(.island-panel[data-island-state="opening"], .island-panel[data-island-state="closing"])
+  :is(.settings-nav, .glass-range-surface)::before {
+  background: none;
+  -webkit-mask: none; mask: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: inset 0 1px 0 rgba(238,246,255,.14), inset 1px 0 0 rgba(238,246,255,.07),
+    inset -1px 0 0 rgba(3,6,16,.12), inset 0 -1px 0 rgba(3,6,16,.12);
+}
+.island-panel[data-island-state="opening"] :is(.settings-nav, .glass-range-surface)::after,
+.island-panel[data-island-state="closing"] :is(.settings-nav, .glass-range-surface)::after { opacity: .3; }
+.island-panel[data-island-state="opening"]::after { animation: glass-opening-sheen 480ms ease-out both; }
+.island-panel[data-island-state="closing"]::after { animation: glass-closing-sheen 480ms ease-in both; }
+.island-panel[data-island-state="opening"]::before,
+.island-panel[data-island-state="closing"]::before { animation: glass-rim-morph 480ms ease-in-out both; }
+.settings-panel:active::before, .log-sidebar:active::before { opacity: .75; }
+@keyframes glass-opening-sheen {
+  0% { opacity: .1; background-position: -40px -16px; }
+  55% { opacity: .5; background-position: 12px 4px; }
+  100% { opacity: .3; background-position: 0 0; }
+}
+@keyframes glass-closing-sheen {
+  from { opacity: .3; background-position: 0 0; }
+  to { opacity: .1; background-position: -30px -12px; }
+}
+@keyframes glass-rim-morph {
+  0%, 100% { opacity: .4; }
+  50% { opacity: .6; }
+}
+@media (prefers-reduced-motion: reduce), (pointer: coarse) {
+  :is(.settings-panel, .log-sidebar, .tier-color-dialog, .context-menu,
+    .confirm-dialog, .settings-nav, .glass-range-surface)::before,
+  :is(.settings-panel, .log-sidebar, .tier-color-dialog, .context-menu,
+    .confirm-dialog, .settings-nav, .glass-range-surface)::after {
+    animation: none !important; transition: none;
+  }
+}
+@media (forced-colors: active) {
+  :is(.settings-panel, .log-sidebar, .tier-color-dialog, .context-menu,
+    .confirm-dialog, .settings-nav, .glass-range-surface)::before,
+  :is(.settings-panel, .log-sidebar, .tier-color-dialog, .context-menu,
+    .confirm-dialog, .settings-nav, .glass-range-surface)::after { display: none; }
 }
 .tier-color-dialog .btn, .context-menu .btn, .confirm-dialog .btn { backdrop-filter: none; }
-.settings-backdrop { backdrop-filter: none; background: rgba(0,0,0,.22); }
+.settings-backdrop { backdrop-filter: none; background: rgba(2,4,12,.09); }
+.confirm-dialog-backdrop { background: rgba(2,4,12,.28); }
+.tier-color-backdrop { background: rgba(2,4,12,.28); }
 [data-liquid-glass="off"] {
-  --liquid-glass-alpha: 1;
-  --liquid-glass-highlight: transparent;
   --glass-blur: none;
 }
-[data-liquid-glass="off"] .settings-panel.island-panel,
-[data-liquid-glass="off"] .log-sidebar.island-panel,
-[data-liquid-glass="off"] .tier-color-dialog,
-[data-liquid-glass="off"] .context-menu,
-[data-liquid-glass="off"] .confirm-dialog {
+[data-liquid-glass="off"] :is(.settings-panel.island-panel, .log-sidebar.island-panel,
+  .tier-color-dialog, .context-menu, .confirm-dialog) {
   background: rgb(var(--liquid-glass-rgb));
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
+[data-liquid-glass="off"] :is(.settings-panel, .log-sidebar, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::before,
+[data-liquid-glass="off"] :is(.settings-panel, .log-sidebar, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::after { display: none; }
+[data-liquid-glass="off"] .settings-nav { background: var(--bg-primary); box-shadow: none; }
+[data-liquid-glass="off"] .glass-range-surface { background: var(--bg-secondary); box-shadow: none; }
 .glass-toggle-row, .glass-transparency-heading {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   font-size: 14px; line-height: 1.5;
@@ -47,5 +169,23 @@
 .glass-toggle-row input { width: 18px; height: 18px; accent-color: var(--accent); }
 .glass-help { margin: 8px 0 24px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
 .glass-transparency-heading output { color: var(--accent); font-variant-numeric: tabular-nums; }
-#glass-transparency { display: block; width: 100%; margin-top: 12px; accent-color: var(--accent); }
+#glass-transparency {
+  -webkit-appearance: none; appearance: none;
+  display: block; width: 100%; height: 6px; margin: 16px 0; border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) 0 var(--glass-range-progress),
+    rgba(var(--glass-reflection-rgb),.16) var(--glass-range-progress) 100%);
+  cursor: pointer; accent-color: var(--accent);
+}
+#glass-transparency::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.65);
+  background: linear-gradient(140deg, rgba(255,255,255,.9), rgba(190,218,255,.72));
+  box-shadow: inset 0 1px 1px #fff, 0 2px 7px rgba(0,0,0,.22);
+}
+#glass-transparency::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(255,255,255,.65);
+  background: linear-gradient(140deg, rgba(255,255,255,.9), rgba(190,218,255,.72));
+  box-shadow: inset 0 1px 1px #fff, 0 2px 7px rgba(0,0,0,.22);
+}
+#glass-transparency:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
 #glass-transparency:disabled { opacity: .45; }

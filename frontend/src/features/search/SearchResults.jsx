@@ -3,6 +3,7 @@
 
   const { useRef, useMemo, useCallback, useState, useLayoutEffect } = React;
   const { t } = window.GameTierI18n;
+  const { useSlidingPill } = window.GameTierApp;
   const EMPTY_RESULTS = [];
   const SearchResultCards = React.memo(function SearchResultCards({ games, onSelect }) {
     return (<>
@@ -132,6 +133,9 @@
       })),
     ];
     const selectedSource = tabs.some((tab) => tab.source === activeSource) ? activeSource : 'all';
+    const pill = useSlidingPill({selectedKey:selectedSource,
+      layoutKey:JSON.stringify(tabs) + (window.GameTierI18n.getLocale?.() || ''),
+      visible:!!data && !loading && !minimized && !covered, buttonsRef:tabRefs});
     const visibleResults = useMemo(() =>
       selectedSource === 'all' ? results : results.filter((item) => item.source === selectedSource),
     [results, selectedSource]);
@@ -204,11 +208,19 @@
           ) : (
             <>
               <div
+                ref={pill.hostRef}
                 className="search-result-tabs"
                 role="tablist"
                 aria-label={t('search.sources')}
                 onKeyDown={handleTabKeyDown}
+                onPointerMove={pill.onPointerMove}
+                onPointerLeave={pill.onPointerLeave}
               >
+                {!hidden && (
+                  <span ref={pill.pillRef} className="search-source-pill" aria-hidden="true">
+                    <span className="search-pill-face" />
+                  </span>
+                )}
                 {tabs.map((tab) => (
                   <button
                     key={tab.source}
@@ -220,6 +232,7 @@
                     aria-controls="search-results-panel"
                     ref={(node) => {
                       if (node) tabRefs.current[tab.source] = node;
+                      else delete tabRefs.current[tab.source];
                     }}
                     className={`search-result-tab ${tab.source === selectedSource ? 'active' : ''}`}
                     onClick={() => onSourceChange(tab.source)}

@@ -19,11 +19,21 @@
       steamgriddbApiKey,
       setSteamgriddbApiKey,
       handleSaveAllSettings,
+      handleOpenSettings,
+      settingsLoadState,
     } = settingsModel;
     return (
       settingsActiveSection === 'search_settings' && (
         <div>
           <SettingsSectionHeading title={t('settings.tabs.search')} />
+          {settingsLoadState === 'error' && (
+            <div role="alert" style={{ marginBottom: 12 }}>
+              <p>{t('settings.loadFailed')}</p>
+              <button className="btn btn-sm" onClick={handleOpenSettings}>
+                {t('settings.retryLoad')}
+              </button>
+            </div>
+          )}
           {/* IGDB */}
           <div
             style={{
@@ -237,6 +247,7 @@
           <button
             className="btn btn-primary btn-sm"
             onClick={handleSaveAllSettings}
+            disabled={settingsLoadState !== 'ready'}
             style={{
               marginBottom: 10,
             }}

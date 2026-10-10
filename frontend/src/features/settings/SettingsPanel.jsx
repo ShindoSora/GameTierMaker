@@ -67,7 +67,6 @@
               bottom: 8,
               width: settingsWidth,
               maxWidth: 'calc(100% - 16px)',
-              border: '1px solid var(--border-strong)',
               display: 'flex',
               flexDirection: 'column',
               minWidth: 0,
@@ -243,10 +242,13 @@
                       <label htmlFor="glass-transparency">{t('settings.glass.transparency')}</label>
                       <output htmlFor="glass-transparency">{preferencesModel.liquidGlassTransparency}%</output>
                     </div>
-                    <input id="glass-transparency" type="range" min="0" max="80" step="1"
-                      value={preferencesModel.liquidGlassTransparency}
-                      disabled={!preferencesModel.liquidGlassEnabled}
-                      onChange={event => preferencesModel.setLiquidGlassTransparency(Number(event.target.value))} />
+                    <div className="glass-range-surface"
+                      style={{'--glass-range-progress': `${preferencesModel.liquidGlassTransparency / 80 * 100}%`}}>
+                      <input id="glass-transparency" type="range" min="0" max="80" step="1"
+                        value={preferencesModel.liquidGlassTransparency}
+                        disabled={!preferencesModel.liquidGlassEnabled}
+                        onChange={event => preferencesModel.setLiquidGlassTransparency(Number(event.target.value))} />
+                    </div>
                     <p className="glass-help">{t('settings.glass.hint')}</p>
                   </div>
                 )}

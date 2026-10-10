@@ -292,7 +292,7 @@ test('settings and log islands retain closing panels, reverse from current geome
 test('minimizing search results retains image nodes and scroll container without rendering covers again', () => {
   const env=environment();let renderer,setData,nameReads=0;const selected=[];
   env.app.LibraryGroup=()=>null;
-  env.load('core/display.js');env.load('features/search/SearchResults.jsx');env.load('features/library/LibraryPanel.jsx');
+  env.load('core/display.js');env.load('hooks/useSlidingPill.js');env.load('features/search/SearchResults.jsx');env.load('features/library/LibraryPanel.jsx');
   const data={results:Array.from({length:40},(_,i)=>({result_id:String(i),source:'vndb',cover:{url:`https://example.invalid/${i}.jpg`},get name(){nameReads++;return `Game ${i}`;}})),sources:[]};
   function Demo({template='A'}) {
     const [minimized,setMinimized]=React.useState(false),[results,updateData]=React.useState(data);setData=updateData;
@@ -313,8 +313,10 @@ test('minimizing search results retains image nodes and scroll container without
     assert.equal(renderer.root.findAllByType('img')[0],images[0]);
     const overlay=renderer.root.findAllByType('div').find(n=>n.props.className?.split(' ').includes('library-search-overlay'));
     assert.equal(overlay.props['aria-hidden'],true);assert.equal(overlay.props.inert,'');
+    assert.equal(renderer.root.findAll(node=>node.props.className==='search-source-pill').length,0);
     act(()=>button('library-search-restore').props.onClick());
     assert.equal(renderer.root.findByProps({id:'search-results-panel'}),panel);
+    assert.equal(renderer.root.findAll(node=>node.props.className==='search-source-pill').length,1);
   }
   assert.equal(nameReads,reads);
   act(()=>renderer.update(React.createElement(Demo,{template:'B'})));
@@ -549,6 +551,238 @@ test('image deletion confirms, deletes, animates, then refreshes; cancel and err
   }
 });
 
+test('minimizing disposes pill animations and restoring binds a fresh indicator to the retained track', () => {
+  const env=environment(), animations=[];let disconnects=0;
+  env.context.ResizeObserver=class {observe(){}disconnect(){disconnects++;}};
+  env.context.matchMedia=()=>({matches:false});
+  env.load('hooks/useSlidingPill.js');
+  const buttonsRef={current:{all:{offsetLeft:6,offsetTop:6,offsetWidth:100,offsetHeight:36},
+    next:{offsetLeft:112,offsetTop:6,offsetWidth:84,offsetHeight:36}}};
+  const createPill=()=>({style:{setProperty(){}},querySelector:()=>null,
+    animate(){const animation={cancel(){this.cancelled=true;}};animations.push(animation);return animation;}});
+  const host={}, original=createPill(), props={selectedKey:'all',layoutKey:'same',visible:false,buttonsRef};
+  const h=mount(env.app.useSlidingPill,props);
+  h.value.hostRef.current=host;h.value.pillRef.current=original;
+  h.update({...props,visible:true});assert.equal(original.style.visibility,'visible');
+  h.update({...props,visible:true,selectedKey:'next'});
+  assert.equal(animations.length,1);const staleFinish=animations[0].onfinish;
+  h.value.pillRef.current=null;
+  h.update({...props,visible:false,selectedKey:'next'});
+  assert.equal(animations[0].cancelled,true);assert.equal(original.style.visibility,'hidden');
+  assert.equal(original.style.willChange,'auto');assert.equal(env.listeners.has('resize'),false);
+  staleFinish();assert.equal(original.style.visibility,'hidden');
+  const restored=createPill();h.value.pillRef.current=restored;
+  h.update({...props,visible:true,selectedKey:'next'});
+  assert.equal(restored.style.visibility,'visible');assert.equal(restored.style.left,'112px');
+  assert.equal(restored.style.width,'84px');assert.equal(animations.length,1);
+  h.unmount();assert.equal(restored.style.visibility,'hidden');assert.equal(env.listeners.has('resize'),false);
+  assert.ok(disconnects>=2);
+});
+
+test('reference glass pill morphs for 720ms and interrupts from the current visual position', () => {
+  const env=environment(), moves=[], faces=[], pending=new Map();
+  let visual=null,reduced=false,motionChange,sequence=0,resizeCallback;
+  env.context.requestAnimationFrame=fn=>{pending.set(++sequence,fn);return sequence;};
+  env.context.cancelAnimationFrame=id=>pending.delete(id);
+  env.context.matchMedia=()=>({get matches(){return reduced;},
+    addEventListener:(_,fn)=>{motionChange=fn;},removeEventListener:()=>{motionChange=null;}});
+  env.context.ResizeObserver=class {constructor(fn){resizeCallback=fn;}observe(){}disconnect(){}};
+  const motion=(list,frames,options)=>{
+    const value={frames,options,playState:'running',cancel(){this.cancelled=true;this.playState='idle';}};
+    list.push(value);return value;
+  };
+  const face={animate:(frames,options)=>motion(faces,frames,options)};
+  const pill={style:{setProperty(){}},querySelector:()=>face,
+    animate:(frames,options)=>motion(moves,frames,options),getBoundingClientRect:()=>({left:0,width:100})};
+  env.context.getComputedStyle=node=>node===pill?(visual||pill.style):{transform:'matrix(1.08, 0, 0, 0.92, 0, 0)'};
+  env.load('hooks/useSlidingPill.js');
+  const tabs={all:{offsetLeft:6,offsetTop:6,offsetWidth:108,offsetHeight:36},
+    bangumi:{offsetLeft:120,offsetTop:6,offsetWidth:100,offsetHeight:36},
+    vndb:{offsetLeft:6,offsetTop:48,offsetWidth:84,offsetHeight:36}};
+  const controller=env.app.createSlidingPillController({},pill,tabs);
+  controller.select('all');assert.equal(moves.length,0);assert.equal(pill.style.left,'6px');
+  controller.select('bangumi');
+  assert.equal(moves[0].options.duration,720);
+  assert.equal(moves[0].frames[0].left,'6px');
+  assert.equal(moves[0].frames[1].borderRadius,'19px');
+  assert.ok(parseFloat(moves[0].frames[1].width)>108);
+  assert.equal(moves[0].frames[2].width,'91px');
+  assert.equal(faces[0].frames[1].transform,'scale(1.12,.89)');
+  const staleFinish=moves[0].onfinish;
+  visual={left:'44px',top:'6px',width:'109px',height:'36px',borderRadius:'17px'};
+  controller.select('vndb');
+  assert.equal(moves[0].cancelled,true);assert.equal(faces[0].cancelled,true);
+  assert.equal(moves[1].frames[0].left,'44px');assert.equal(moves[1].frames[0].width,'109px');
+  assert.equal(moves[1].frames[0].borderRadius,'17px');
+  assert.equal(faces[1].frames[0].transform,'matrix(1.08, 0, 0, 0.92, 0, 0)');
+  staleFinish();assert.notEqual(moves[1].cancelled,true);
+  visual=null;moves[1].onfinish();
+  assert.equal(pill.style.top,'48px');assert.equal(pill.style.width,'84px');assert.equal(pill.style.willChange,'auto');
+  tabs.vndb.offsetWidth=96;resizeCallback();assert.equal(moves.length,3);
+  reduced=true;motionChange();assert.equal(moves[2].cancelled,true);assert.equal(pill.style.width,'96px');
+  reduced=false;controller.pause();tabs.vndb.offsetWidth=102;resizeCallback();assert.equal(moves.length,3);
+  controller.select('vndb',true);assert.equal(pill.style.width,'102px');
+  controller.pointerMove({clientX:70,pointerType:'mouse'});assert.equal(pending.size,1);
+  controller.dispose();assert.equal(pending.size,0);assert.equal(motionChange,null);
+  assert.equal(env.listeners.has('resize'),false);
+});
+
+test('search pill springs continuously through rapid changes, width changes and wrapped rows', () => {
+  const env=environment(), frames=new Map();let now=0,id=0,resizeCallback,observations=0;
+  env.context.requestAnimationFrame=fn=>{frames.set(++id,fn);return id;};
+  env.context.cancelAnimationFrame=key=>frames.delete(key);
+  env.context.matchMedia=()=>({matches:false});
+  env.context.ResizeObserver=class {
+    constructor(fn){resizeCallback=fn;} observe(){observations++;} disconnect(){}
+  };
+  env.load('hooks/useSlidingPill.js');
+  const vars=new Map(), pill={style:{setProperty:(key,value)=>vars.set(key,value)},
+    getBoundingClientRect:()=>({left:0,width:100})};
+  const buttons={all:{offsetLeft:0,offsetTop:0,offsetWidth:100,offsetHeight:26},
+    bangumi:{offsetLeft:106,offsetTop:0,offsetWidth:84,offsetHeight:26},
+    vndb:{offsetLeft:0,offsetTop:32,offsetWidth:78,offsetHeight:26}};
+  const controller=env.app.createSlidingPillController({},pill,buttons);
+  const step=()=>{const callbacks=[...frames.values()];frames.clear();now+=1000/60;callbacks.forEach(fn=>fn(now));};
+  const flush=()=>{for(let i=0;i<180&&frames.size;i++)step();assert.equal(frames.size,0);};
+  controller.select('all');
+  assert.equal(pill.style.width,'100px');assert.equal(pill.style.visibility,'visible');
+  const initial=pill.style.transform;
+  controller.select('bangumi');
+  assert.equal(pill.style.transform,initial);assert.equal(frames.size,1);
+  for(let i=0;i<5;i++)step();
+  assert.ok(parseFloat(pill.style.width)>84&&parseFloat(pill.style.width)<100);
+  assert.ok(Number(vars.get('--pill-energy'))>0);
+  const midFlight=pill.style.transform;
+  controller.select('vndb');
+  assert.equal(pill.style.transform,midFlight);
+  assert.equal(observations,4,'selection alone must not retrigger the observer and snap the pill');
+  flush();
+  assert.equal(pill.style.width,'78px');
+  assert.equal(pill.style.transform,'translate3d(0px, 32px, 0) scale(1, 1)');
+  assert.equal(vars.get('--pill-energy'),'0.000');
+  buttons.vndb.offsetWidth=122;resizeCallback();flush();
+  assert.equal(pill.style.width,'122px');
+  buttons.vndb.offsetLeft=44;env.listeners.get('resize')();
+  assert.equal(pill.style.transform,'translate3d(44px, 32px, 0) scale(1, 1)');
+  controller.select('all');controller.pause();
+  resizeCallback();assert.equal(frames.size,0,'hidden search results must not schedule frames');
+  controller.select('bangumi',true);assert.equal(pill.style.width,'84px');assert.equal(frames.size,0);
+  controller.dispose();assert.equal(env.listeners.has('resize'),false);
+});
+
+test('search pill respects reduced motion and releases pending frames', () => {
+  const env=environment(), frames=new Map();let id=0,reduced=true,motionChange,disconnects=0;
+  env.context.requestAnimationFrame=fn=>{frames.set(++id,fn);return id;};
+  env.context.cancelAnimationFrame=key=>frames.delete(key);
+  env.context.matchMedia=()=>({get matches(){return reduced;},
+    addEventListener:(_,fn)=>{motionChange=fn;},removeEventListener:()=>{motionChange=null;}});
+  env.context.ResizeObserver=class {observe(){} disconnect(){disconnects++;}};
+  env.load('hooks/useSlidingPill.js');
+  const pill={style:{setProperty(){}}};
+  const controller=env.app.createSlidingPillController({},pill,{
+    all:{offsetLeft:0,offsetTop:0,offsetWidth:100,offsetHeight:26},
+    right:{offsetLeft:106,offsetTop:0,offsetWidth:84,offsetHeight:26}});
+  controller.select('all');controller.select('right');
+  assert.equal(frames.size,0);assert.equal(pill.style.width,'84px');
+  reduced=false;controller.select('all');assert.equal(frames.size,1);
+  reduced=true;motionChange();assert.equal(frames.size,0);assert.equal(pill.style.width,'100px');
+  reduced=false;controller.select('right');controller.dispose();
+  assert.equal(frames.size,0);assert.equal(motionChange,null);assert.ok(disconnects>0);
+});
+
+test('search source pill preserves filtering, fallback selection and keyboard navigation', () => {
+  const env=environment();env.context.requestAnimationFrame=fn=>{fn();return 1;};
+  env.load('hooks/useSlidingPill.js');env.load('features/search/SearchResults.jsx');
+  const data={results:[{id:'1',source:'bangumi',name:'one'},{id:'2',source:'vndb',name:'two'}],
+    sources:[{source:'bangumi',count:1,status:'ok'},{source:'vndb',count:1,status:'ok'}]};
+  const selected=[];let renderer;
+  const props={data,activeSource:'bangumi',onSourceChange:key=>selected.push(key),onSelect(){}};
+  act(()=>{renderer=Renderer.create(React.createElement(env.app.SearchResults,props));});
+  let tabs=renderer.root.findAll(node=>node.props.role==='tab');
+  assert.equal(tabs.filter(node=>node.props['aria-selected']).length,1);
+  assert.equal(renderer.root.findAllByType('span').filter(node=>node.props.className==='search-source-pill').length,1);
+  assert.equal(renderer.root.findAll(node=>node.props.className==='search-result-card').length,1);
+  const tablist=renderer.root.find(node=>node.props.role==='tablist');
+  act(()=>tablist.props.onKeyDown({key:'ArrowRight',preventDefault(){}}));
+  assert.equal(selected.pop(),'vndb');
+  act(()=>tabs[0].props.onClick());assert.equal(selected.pop(),'all');
+  act(()=>renderer.update(React.createElement(env.app.SearchResults,{...props,activeSource:'removed-source'})));
+  tabs=renderer.root.findAll(node=>node.props.role==='tab');
+  assert.equal(tabs[0].props['aria-selected'],true);
+  assert.equal(renderer.root.findAll(node=>node.props.className==='search-result-card').length,2);
+  act(()=>renderer.unmount());
+});
+
+test('glass lighting clamps pointer geometry and settles without an idle animation loop', () => {
+  const env=environment(), handlers=new Map(), pending=new Map();
+  let sequence=0, reduced=false, resizeCallback, motionCallback;
+  env.context.document.addEventListener=(type,fn)=>handlers.set(type,fn);
+  env.context.document.removeEventListener=(type,fn)=>{if(handlers.get(type)===fn)handlers.delete(type);};
+  env.context.requestAnimationFrame=fn=>{pending.set(++sequence,fn);return sequence;};
+  env.context.cancelAnimationFrame=id=>pending.delete(id);
+  env.context.matchMedia=()=>({get matches(){return reduced;},
+    addEventListener:(_,fn)=>{motionCallback=fn;},removeEventListener:()=>{motionCallback=null;}});
+  env.context.ResizeObserver=class {
+    constructor(fn){resizeCallback=fn;}
+    observe(){}
+    disconnect(){}
+  };
+  env.load('core/liquidGlass.js');
+  const geometry=env.app.getGlassLight({left:100,top:100,width:200,height:100},-50,500);
+  assert.equal(geometry.x,0);assert.equal(geometry.y,1);assert.ok(Number.isFinite(geometry.angle));
+  const node=(bounds,parent=null)=>{
+    const values=new Map();
+    const element={isConnected:true,parentElement:parent,values,
+      getBoundingClientRect:()=>bounds,closest:()=>element,
+      style:{setProperty:(key,value)=>values.set(key,value),removeProperty:key=>values.delete(key)}};
+    return element;
+  };
+  const bounds={left:0,top:0,width:400,height:400};
+  const panel=node(bounds), navigation=node({left:100,top:100,width:200,height:200},panel);
+  const stop=env.app.createLiquidGlassController();
+  const move=handlers.get('pointermove');
+  move({target:navigation,clientX:150,clientY:150,pointerType:'mouse'});
+  move({target:navigation,clientX:200,clientY:200,pointerType:'mouse'});
+  assert.equal(pending.size,1);
+  const flush=()=>{for(let i=0;i<80&&pending.size;i++){
+    const callbacks=[...pending.values()];pending.clear();callbacks.forEach(fn=>fn());
+  }assert.equal(pending.size,0);};
+  flush();
+  assert.equal(panel.values.get('--glass-light-x'),'50.00%');
+  assert.equal(navigation.values.get('--glass-light-x'),'50.00%');
+  bounds.width=800;resizeCallback();flush();
+  assert.equal(panel.values.get('--glass-light-x'),'25.00%');
+  handlers.get('pointerout')({relatedTarget:null});
+  assert.equal(panel.values.get('--glass-presence'),'0');
+  move({target:navigation,clientX:200,clientY:200,pointerType:'touch'});
+  assert.equal(pending.size,0);
+  reduced=true;motionCallback();
+  move({target:navigation,clientX:200,clientY:200,pointerType:'mouse'});
+  assert.equal(pending.size,0);
+  reduced=false;move({target:navigation,clientX:200,clientY:200,pointerType:'mouse'});
+  assert.equal(pending.size,1);
+  stop();
+  assert.equal(pending.size,0);assert.equal(handlers.size,0);
+  assert.equal(panel.values.size,0);assert.equal(navigation.values.size,0);
+  assert.equal(env.listeners.has('resize'),false);assert.equal(motionCallback,null);
+});
+
+test('glass switch attaches and tears down reflection listeners', () => {
+  const env=environment(), handlers=new Map();
+  env.context.document.addEventListener=(type,fn)=>handlers.set(type,fn);
+  env.context.document.removeEventListener=(type,fn)=>{if(handlers.get(type)===fn)handlers.delete(type);};
+  env.context.matchMedia=()=>({matches:false});
+  env.load('core/liquidGlass.js');
+  let renderer;
+  act(()=>{renderer=Renderer.create(React.createElement(env.app.LiquidGlassEffects,{enabled:false}));});
+  assert.equal(handlers.size,0);
+  act(()=>renderer.update(React.createElement(env.app.LiquidGlassEffects,{enabled:true})));
+  assert.equal(handlers.has('pointermove'),true);
+  act(()=>renderer.update(React.createElement(env.app.LiquidGlassEffects,{enabled:false})));
+  assert.equal(handlers.size,0);assert.equal(env.listeners.size,0);
+  act(()=>renderer.unmount());
+});
+
 test('glass preferences apply immediately and survive remount', () => {
   const env = environment();
   const attrs = {}, styles = {};
@@ -618,6 +852,61 @@ test('settings preserve untouched hidden secrets and report partial save failure
   writes.length=0;
   await act(async()=>{await h.value.handleSaveAllSettings();});
   assert.deepEqual(writes.map(c=>c.url),['/settings/bangumi']);h.unmount();
+});
+
+test('settings reject saves after a failed load and reload without clearing hidden secrets', async () => {
+  const env = environment(), writes = [], notices = [];
+  let failLoad = true;
+  env.app.showToast = (message, type) => notices.push({message, type});
+  env.app.fetchAPI = async (url, options) => {
+    if (options) { writes.push({url, body:JSON.parse(options.body)}); return {}; }
+    if (url === '/settings' && failLoad) throw Error('settings unavailable');
+    return {bangumi_user_agent:'saved-agent', configured_secrets:{bangumi_token:true}};
+  };
+  env.load('core/display.js'); env.load('components/Controls.jsx');
+  env.load('features/settings/useSettings.js'); env.load('features/settings/SearchSettings.jsx');
+  const h = mount(env.app.useSettings, {loadDownloadSettings(){}, setShowSettings(){}, loadSteamAccounts(){}, loadPsnAccounts(){}});
+  await act(async () => { await h.value.handleOpenSettings(); });
+  assert.equal(h.value.settingsLoadState, 'error');
+  await act(async () => { await h.value.handleSaveAllSettings(); });
+  assert.equal(writes.length, 0);
+  let panel;
+  const renderPanel = () => React.createElement(env.app.SearchSettings, {
+    preferencesModel:{settingsActiveSection:'search_settings'}, settingsModel:h.value,
+  });
+  act(() => { panel = Renderer.create(renderPanel()); });
+  assert.equal(panel.root.findByProps({role:'alert'}).type, 'div');
+  assert.equal(panel.root.findAllByType('button').find(b => b.props.onClick === h.value.handleSaveAllSettings).props.disabled, true);
+  failLoad = false;
+  await act(async () => { await panel.root.findAllByType('button').find(b => b.props.onClick === h.value.handleOpenSettings).props.onClick(); });
+  act(() => panel.update(renderPanel()));
+  assert.equal(h.value.settingsLoadState, 'ready');
+  assert.equal(panel.root.findAllByProps({role:'alert'}).length, 0);
+  assert.equal(panel.root.findAllByType('button').find(b => b.props.onClick === h.value.handleSaveAllSettings).props.disabled, false);
+  await act(async () => { await h.value.handleSaveAllSettings(); });
+  assert.equal(writes.length, 0);
+  act(() => h.value.setBangumiUserAgent('edited-agent'));
+  await act(async () => { await h.value.handleSaveAllSettings(); });
+  assert.deepEqual(writes, [{url:'/settings/bangumi', body:{bangumi_user_agent:'edited-agent', bangumi_token:null}}]);
+  failLoad = true;
+  await act(async () => { await h.value.handleOpenSettings(); await h.value.handleSaveAllSettings(); });
+  assert.equal(writes.length, 1);
+  assert.ok(notices.some(n => n.type === 'error' && n.message === 'settings.loadFailed'));
+  act(() => panel.unmount()); h.unmount();
+});
+
+test('settings ignore an older load failure after a newer load succeeds', async () => {
+  const env = environment(), first = deferred(); let reads = 0;
+  env.app.fetchAPI = async url => url === '/settings'
+    ? (++reads === 1 ? first.promise : {bangumi_user_agent:'new-agent'}) : {};
+  env.load('core/display.js'); env.load('features/settings/useSettings.js');
+  const h = mount(env.app.useSettings, {loadDownloadSettings(){},setShowSettings(){},loadSteamAccounts(){},loadPsnAccounts(){}});
+  let older;
+  act(() => { older = h.value.handleOpenSettings(); });
+  await act(async () => { await h.value.handleOpenSettings(); });
+  await act(async () => { first.reject(Error('stale failure')); await older; });
+  assert.equal(h.value.settingsLoadState, 'ready');
+  assert.equal(h.value.bangumiUserAgent, 'new-agent'); h.unmount();
 });
 
 test('live logs deduplicate entries and close their connection on unmount',async()=>{
@@ -749,6 +1038,58 @@ test('Steam callback accepts only the expected same-origin operation and dedupli
   await act(async()=>{await message(event);await message(event);});
   assert.deepEqual(refreshes,['active']);assert.deepEqual(backfills,['steam']);
   assert.equal(calls.length,1);h.unmount();assert.equal(env.listeners.size,0);
+});
+
+test('Steam completion failure retains its operation and concurrent retries complete once', async () => {
+  const env = environment(), refresh = deferred(), notices = [], backfills = [];
+  let failRefresh = true, refreshes = 0, accountReads = 0;
+  env.app.showToast = (message, type) => notices.push({message, type});
+  env.app.fetchAPI = async () => { accountReads++; return {accounts:{}}; };
+  env.load('features/platforms/useSteamAccount.js');
+  const h = mount(env.app.useSteamAccount, {
+    getCurrentTemplate:() => ({currentId:'active', loadCurrentTemplate:async () => {
+      refreshes++; if (failRefresh) throw Error('snapshot unavailable'); await refresh.promise;
+    }}), runBackfill:source => backfills.push(source), currentId:'active',
+    setSettingsOperation(){}, refreshSelectedTemplate:async()=>{}, confirmAction:async()=>true,
+  });
+  env.context.sessionStorage.setItem('steam-import-operation', 'expected');
+  const message = env.listeners.get('message');
+  const event = {origin:env.context.location.origin, data:{type:'steam-import-done',operation_id:'expected',total:3}};
+  await act(async () => { await assert.doesNotReject(message(event)); });
+  assert.equal(env.context.sessionStorage.getItem('steam-import-operation'), 'expected');
+  assert.equal(notices.filter(n => n.type === 'error').length, 1);
+  assert.equal(backfills.length, 0);
+  failRefresh = false;
+  let retry, duplicate;
+  act(() => { retry = message(event); duplicate = message(event); });
+  assert.equal(refreshes, 2);
+  await act(async () => { refresh.resolve(); await Promise.all([retry, duplicate]); });
+  assert.equal(accountReads, 1); assert.deepEqual(backfills, ['steam']);
+  assert.equal(env.context.sessionStorage.getItem('steam-import-operation'), null);
+  await act(async () => { await message(event); });
+  assert.equal(refreshes, 2); assert.equal(notices.filter(n => n.type === 'success').length, 1);
+  h.unmount();
+});
+
+test('Steam polling stops after repeated completion failures and preserves the pending operation', async () => {
+  const env = environment({setTimeout:fn => setTimeout(fn, 0)}), stopped = deferred();
+  let statusReads = 0, refreshes = 0;
+  env.context.open = () => {};
+  env.app.showToast = message => { if (message === 'errors.backendUnavailable') stopped.resolve(); };
+  env.app.fetchAPI = async url => {
+    if (url.startsWith('/settings/steam/jump')) return {operation_id:'expected',url:'https://example.invalid'};
+    if (url.startsWith('/settings/steam/import-status/')) { statusReads++; return {status:'complete',operation_id:'expected'}; }
+    return {};
+  };
+  env.load('features/platforms/useSteamAccount.js');
+  const h = mount(env.app.useSteamAccount, {
+    getCurrentTemplate:() => ({currentId:'active',loadCurrentTemplate:async()=>{refreshes++;throw Error('snapshot unavailable');}}),
+    runBackfill:() => assert.fail('backfill started before refresh succeeded'),currentId:'active',
+    setSettingsOperation(){},refreshSelectedTemplate:async()=>{},confirmAction:async()=>true,
+  });
+  await act(async () => { await h.value.handleSteamJump(); await stopped.promise; });
+  assert.equal(statusReads, 5); assert.equal(refreshes, 5);
+  assert.equal(env.context.sessionStorage.getItem('steam-import-operation'), 'expected'); h.unmount();
 });
 
 test('backfill unmount aborts the active request and does not start queued work',async()=>{

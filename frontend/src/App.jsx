@@ -35,6 +35,7 @@
     ColorPicker,
     TierContextMenu,
     PresetsDialog,
+    LiquidGlassEffects,
   } = window.GameTierApp;
   function App() {
     const dialogsModel = useDialogs();
@@ -254,6 +255,7 @@
           request={dialogsModel.confirmRequest}
           onResolve={dialogsModel.resolveConfirm}
         />
+        <LiquidGlassEffects enabled={preferencesModel.liquidGlassEnabled} />
         <InputDialog request={dialogsModel.inputRequest} onResolve={dialogsModel.resolveInput} />
         {preferencesModel.refreshing && <RefreshOverlay />}
         {loadingMask}
