@@ -2,10 +2,12 @@
   'use strict';
 
   const { t } = window.GameTierI18n;
-  const { TierRow, storeDragEvent, calculateInsertIndex, dragState, DraggableImage } =
+  const { TierRow, TierMotionSlot, UnassignedMotion, useTierPresence,
+    storeDragEvent, calculateInsertIndex, dragState, DraggableImage } =
     window.GameTierApp;
   function TierBoard({ templatesModel, tierBoardModel, imagesModel }) {
-    const { tiers, imagesMeta, unassigned } = templatesModel;
+    const { tiers, imagesMeta, unassigned, currentId } = templatesModel;
+    const { entries, complete } = useTierPresence(currentId, tiers);
     const {
       handleDropToTier,
       handleRenameTier,
@@ -23,26 +25,27 @@
     const { handleDeleteImage } = imagesModel;
     return (
       <div id="tier-list-area" className="tier-list-area">
-        {tiers.map((tier, i) => (
-          <TierRow
-            key={tier.id}
-            tier={tier}
-            images={tier.image_ids}
-            index={i}
-            onDrop={handleDropToTier}
-            onRename={handleRenameTier}
-            onColor={handleColorTier}
-            onDeleteTier={handleDeleteTier}
-            onDeleteImage={handleDeleteImage}
-            onAddToUnassigned={handleAddToUnassigned}
-            onRowReorder={handleRowReorder}
-            onContextMenu={handleTierContextMenu}
-            imagesMeta={imagesMeta}
-          />
+        {entries.map(({ tier, phase }) => (
+          <TierMotionSlot key={`${currentId}:${tier.id}`} tier={tier} phase={phase} onComplete={complete}>
+            <TierRow
+              tier={tier}
+              images={tier.image_ids}
+              index={tiers.findIndex(row => row.id === tier.id)}
+              onDrop={handleDropToTier}
+              onRename={handleRenameTier}
+              onColor={handleColorTier}
+              onDeleteTier={handleDeleteTier}
+              onDeleteImage={handleDeleteImage}
+              onAddToUnassigned={handleAddToUnassigned}
+              onRowReorder={handleRowReorder}
+              onContextMenu={handleTierContextMenu}
+              imagesMeta={imagesMeta}
+            />
+          </TierMotionSlot>
         ))}
 
         {/* Unassigned */}
-        <div className="unsorted-section">
+        <UnassignedMotion key={currentId}>
           <div className="unsorted-header">
             <svg
               width="14"
@@ -122,7 +125,7 @@
               })()
             )}
           </div>
-        </div>
+        </UnassignedMotion>
       </div>
     );
   }

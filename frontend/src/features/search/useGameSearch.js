@@ -3,7 +3,7 @@
 
   const { useState, useRef, useEffect } = React;
   const { getErrorMessage, t } = window.GameTierI18n;
-  const { fetchAPI, showToast } = window.GameTierApp;
+  const { fetchAPI, fetchAPIStream, showToast } = window.GameTierApp;
   function useGameSearch({ currentId, setLoading, loadCurrentTemplate }) {
     const [searchResults, setSearchResults] = useState(null);
     const [searchSource, setSearchSource] = useState('all');
@@ -33,21 +33,46 @@
       setSearchMinimized(false);
       setSearchLoading(true);
       try {
-        const res = await fetchAPI('/images/search', {
+        const options = {
           method: 'POST',
           body: JSON.stringify({
             query,
           }),
           signal: controller.signal,
-        });
-        if (sequence === searchSequenceRef.current) setSearchResults(res);
+        };
+        const legacySearch = async () => {
+          const res = await fetchAPI('/images/search', options);
+          if (sequence === searchSequenceRef.current) setSearchResults(res);
+        };
+        if (typeof fetchAPIStream === 'function') {
+          try {
+            await fetchAPIStream('/images/search/stream', options, event => {
+              if (sequence === searchSequenceRef.current && !controller.signal.aborted) {
+                setSearchResults(event);
+              }
+            });
+          } catch (error) {
+            // An older running backend still supports the original final-response API.
+            if ([404, 405].includes(error?.status) && !controller.signal.aborted) await legacySearch();
+            else throw error;
+          }
+        } else await legacySearch();
       } catch (e) {
-        const aborted = e?.details?.name === 'AbortError';
+        const aborted = controller.signal.aborted || e?.name === 'AbortError' || e?.details?.name === 'AbortError';
         if (!aborted && sequence === searchSequenceRef.current) {
+          setSearchResults(previous => ({
+            ...(previous || { query, results: [], sources: [] }), partial: true, interrupted: true,
+            sources: (previous?.sources || []).map(source =>
+              ['waiting', 'searching'].includes(source.status)
+                ? { ...source, status: 'error', error_code: 'search_stream_interrupted' } : source),
+          }));
           showToast(getErrorMessage(e, 'errors.searchFailed'), 'error');
         }
       } finally {
-        if (sequence === searchSequenceRef.current) setSearchLoading(false);
+        if (sequence === searchSequenceRef.current) {
+          setSearchLoading(false);
+          if (searchAbortRef.current === controller) searchAbortRef.current = null;
+        }
       }
     };
     const handleCloseSearchResults = () => {

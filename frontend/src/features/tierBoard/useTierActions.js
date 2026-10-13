@@ -1,10 +1,21 @@
 (() => {
   'use strict';
 
-  const { useState, useEffect } = React;
-  const { t } = window.GameTierI18n;
-  const { fetchAPI, clearDragEvent, showToast } = window.GameTierApp;
+  const { useState, useEffect, useRef } = React;
+  const { t, getErrorMessage } = window.GameTierI18n;
+  const { fetchAPI, clearDragEvent, showToast, prepareTierRowDissolve } = window.GameTierApp;
   function useTierActions({ currentId, loadCurrentTemplate, confirmAction }) {
+    const deletingRowsRef = useRef(new Set()), effectsRef = useRef(new Set());
+    const mountedRef = useRef(true), currentIdRef = useRef(currentId);
+    currentIdRef.current = currentId;
+    useEffect(() => {
+      mountedRef.current = true;
+      return () => { mountedRef.current = false; };
+    }, []);
+    useEffect(() => () => {
+      effectsRef.current.forEach(effect => effect.dispose());
+      effectsRef.current.clear();
+    }, [currentId]);
     const [unassignedDragOver, setUnassignedDragOver] = useState(false);
     const [unassignedInsertIdx, setUnassignedInsertIdx] = useState(-1);
     const [tierContextMenu, setTierContextMenu] = useState(null);
@@ -84,14 +95,32 @@
       await loadCurrentTemplate(currentId);
     };
     const handleDeleteTier = async (tierId) => {
-      if (!(await confirmAction(t('dialogs.deleteTier')))) return;
-      await fetchAPI(
-        `/templates/current/tiers/${tierId}?template_id=${encodeURIComponent(currentId)}`,
-        {
-          method: 'DELETE',
+      const targetTemplateId = currentId, key = JSON.stringify([currentId, tierId]);
+      if (!targetTemplateId || deletingRowsRef.current.has(key)) return;
+      deletingRowsRef.current.add(key);
+      let effect = null;
+      try {
+        if (!(await confirmAction(t('dialogs.deleteTier'))) || !mountedRef.current) return;
+        if (currentIdRef.current === targetTemplateId) {
+          try { effect = await prepareTierRowDissolve?.(tierId); } catch (_) { /* Visual fallback. */ }
         }
-      );
-      await loadCurrentTemplate(currentId);
+        if (effect) effectsRef.current.add(effect);
+        if (!mountedRef.current) return;
+        await fetchAPI(
+          `/templates/current/tiers/${encodeURIComponent(tierId)}?template_id=${encodeURIComponent(targetTemplateId)}`,
+          { method: 'DELETE' }
+        );
+        if (mountedRef.current && currentIdRef.current === targetTemplateId) {
+          try { await effect?.play(); } catch (_) { /* Still refresh a successful deletion. */ }
+          if (mountedRef.current) await loadCurrentTemplate(targetTemplateId);
+        }
+      } catch (error) {
+        if (mountedRef.current) showToast(getErrorMessage(error, 'errors.deleteFailed'), 'error');
+      } finally {
+        effect?.dispose();
+        effectsRef.current.delete(effect);
+        deletingRowsRef.current.delete(key);
+      }
     };
     const handleRowReorder = async (fromIdx, toIdx) => {
       await fetchAPI(

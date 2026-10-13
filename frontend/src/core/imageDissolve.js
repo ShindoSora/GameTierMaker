@@ -47,7 +47,7 @@
   }
 
   function createParticleEffect(snapshots) {
-    let canvas = null, frame = 0, timer = 0, settle = null;
+    let canvas = null, frame = 0, timer = 0, settle = null, disposed = false;
     const finish = () => {
       cancelAnimationFrame(frame);
       clearTimeout(timer);
@@ -56,11 +56,13 @@
       if (settle) { const resolve = settle; settle = null; resolve(); }
     };
     const dispose = () => {
+      disposed = true;
       finish();
       snapshots.forEach(item => { item.element.style.visibility = item.visibility; });
     };
     const play = () => new Promise(resolve => {
-      if (!snapshots.length || !snapshots.some(item => item.element.isConnected)) { resolve(); return; }
+      if (disposed || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        || !snapshots.length || !snapshots.some(item => item.element.isConnected)) { resolve(); return; }
       canvas = document.createElement('canvas');
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
       const width = window.innerWidth, height = window.innerHeight;
@@ -132,21 +134,19 @@
     return prepareImageElementsDissolve(covers);
   }
 
-  async function prepareGroupPanelDissolve(groupId) {
+  async function preparePanelDissolve(element, selector, matchesClone) {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return null;
-    const element = findGroupPanel(groupId);
     if (!element) return null;
     const rect = element.getBoundingClientRect();
-    if (!rect.width || !rect.height) return null;
+    if (!rect.width || !rect.height || rect.bottom <= 0 || rect.right <= 0
+      || rect.top >= window.innerHeight || rect.left >= window.innerWidth) return null;
     let bitmap;
     if (typeof html2canvas === 'function') {
       try {
         bitmap = await html2canvas(element, {
           backgroundColor: null, scale: 1, useCORS: true, logging: false, imageTimeout: 1200,
           onclone: clonedDocument => {
-            const panel = [...clonedDocument.querySelectorAll('[data-library-group-id]')]
-              .find(node => node.dataset.libraryGroupId === String(groupId)
-                && node.classList.contains('group-island-overlay'));
+            const panel = [...clonedDocument.querySelectorAll(selector)].find(matchesClone);
             if (!panel) return;
             // html2canvas does not parse CSS Color 4 emitted by color-mix().
             const pixel = clonedDocument.createElement('canvas');
@@ -190,5 +190,18 @@
     }
     return createParticleEffect([{element, rect, bitmap, pieces, visibility:element.style.visibility}]);
   }
-  Object.assign(window.GameTierApp, { prepareImageDissolve, prepareGroupImagesDissolve, prepareGroupPanelDissolve });
+  function prepareGroupPanelDissolve(groupId) {
+    const element = findGroupPanel(groupId);
+    return preparePanelDissolve(element, '[data-library-group-id]', node =>
+      node.dataset.libraryGroupId === String(groupId)
+      && node.classList.contains('group-island-overlay') === element.classList.contains('group-island-overlay'));
+  }
+  function prepareTierRowDissolve(tierId) {
+    const selector = '[data-tier-row-id]';
+    const matches = node => node.dataset.tierRowId === String(tierId);
+    const element = [...document.querySelectorAll(selector)].find(matches);
+    return preparePanelDissolve(element, selector, matches);
+  }
+  Object.assign(window.GameTierApp, { prepareImageDissolve, prepareGroupImagesDissolve,
+    prepareGroupPanelDissolve, prepareTierRowDissolve });
 })();

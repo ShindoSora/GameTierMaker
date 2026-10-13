@@ -60,7 +60,7 @@
     useLayoutEffect(() => {
       if ((phase === 'open' || phase === 'closed') && motions.current[0]?.playState === 'finished') cancel();
     }, [phase]);
-    return { visible: open || phase !== 'closed', phase, panelRef, contentRef, backdropRef };
+    return { visible: open || phase !== 'closed', phase, panelRef, contentRef, backdropRef, anchorRef };
   }
   Object.assign(window.GameTierApp, { useIslandPanel });
 })();

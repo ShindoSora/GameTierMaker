@@ -217,6 +217,7 @@
     };
     return (
       <GlowCard
+        data-tier-row-id={tier.id}
         className={`tier-row-container ${dragOver ? 'image-drag-over' : ''}`}
         style={{
           ...getTierTheme(tier.color),

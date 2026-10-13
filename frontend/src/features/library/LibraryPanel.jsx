@@ -3,7 +3,7 @@
 
   const { useEffect, useLayoutEffect, useRef, useState } = React;
   const { t } = window.GameTierI18n;
-  const { SearchResults, SearchResultsMinimized, LibraryGroup, getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } = window.GameTierApp;
+  const { SearchResults, LibraryGroup, useSearchPresentation, getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } = window.GameTierApp;
   function LibraryPanel({
     preferencesModel,
     searchModel,
@@ -17,6 +17,7 @@
     const toggleRef = useRef(null);
     const panelRef = useRef(null);
     const contentRef = useRef(null);
+    const searchDockRef = useRef(null);
     const animationRef = useRef(null);
     const contentAnimationRef = useRef(null);
     const previousOpenRef = useRef(libraryOpen);
@@ -119,6 +120,9 @@
     } = libraryModel;
     const { handleAddToUnassigned } = tierBoardModel;
     const { imagesMeta, libraryGroups } = templatesModel;
+    const searchPresentation = useSearchPresentation({ data: searchResults, loading: searchLoading,
+      minimized: searchMinimized, source: searchSource });
+    const searchCoversGroups = !!(searchResults || searchLoading) && !searchMinimized;
     return (
       <>
         <div className="library-toggle-rail">
@@ -207,10 +211,6 @@
             />
             <div
               className="library-upload-actions"
-              style={{
-                display: 'flex',
-                gap: 6,
-              }}
             >
               <div
                 className="library-upload-main"
@@ -244,42 +244,32 @@
               </div>
               <button
                 className="btn btn-sm library-create-group"
-                style={{
-                  flexShrink: 0,
-                  width: '56px',
-                  justifyContent: 'center',
-                  color: 'var(--success)',
-                  padding: '4px 0',
-                }}
                 onClick={handleCreateGroup}
                 title={t('library.newGroup')}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
                 >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <path d="M12 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v3M2 11h20" />
+                  <path d="M18 16v6m-3-3h6" />
                 </svg>
+                {t('library.newGroup')}
               </button>
             </div>
-            {searchMinimized && (
-              <SearchResultsMinimized
-                data={searchResults}
-                loading={searchLoading}
-                onClose={handleCloseSearchResults}
-                onRestore={() => setSearchMinimized(false)}
-              />
-            )}
+            {searchPresentation.visible && <div ref={searchDockRef} className="search-panel-dock" aria-hidden="true" />}
           </div>
           <div className="library-groups-area">
-          <div className={`library-groups-scroll ${activeGroupData ? 'covered' : ''}`} ref={libraryGroupsRef}
+          <div className={`library-groups-scroll ${activeGroupData ? 'covered' : ''} ${searchCoversGroups ? 'search-covered' : ''}`} ref={libraryGroupsRef}
             style={{ opacity: activeGroupData ? 0 : 1 }}
-            aria-hidden={!!activeGroupData} inert={activeGroupData ? '' : undefined}>
+            aria-hidden={!!activeGroupData || searchCoversGroups} inert={activeGroupData || searchCoversGroups ? '' : undefined}>
             {libraryGroups.map((g) => (
               <LibraryGroup
                 key={g.id} group={g} images={g.image_ids} onOpen={handleOpenLibraryGroup}
@@ -288,13 +278,6 @@
               />
             ))}
           </div>
-            {/* Keep covers and their scroll container mounted while minimized. */}
-            <SearchResults
-              data={searchResults} loading={searchLoading} activeSource={searchSource}
-              onSourceChange={setSearchSource} onSelect={handleSelectSearchResult}
-              onClose={handleCloseSearchResults} onMinimize={() => setSearchMinimized(true)}
-              minimized={searchMinimized} covered={!!activeGroupData}
-            />
             {activeGroupData && (
               <LibraryGroup
                 key={`active-${activeGroupData.id}`}
@@ -315,6 +298,16 @@
               />
             )}
           </div>
+          {/* One persistent shell grows from the header dock over the groups below. */}
+          <SearchResults
+            data={searchPresentation.data} loading={searchPresentation.loading} activeSource={searchPresentation.source}
+            onSourceChange={setSearchSource} onSelect={handleSelectSearchResult}
+            onClose={handleCloseSearchResults} onMinimize={() => setSearchMinimized(true)}
+            onRestore={() => setSearchMinimized(false)} hostRef={contentRef} dockRef={searchDockRef}
+            minimized={searchPresentation.minimized} exiting={searchPresentation.exiting}
+            onExitComplete={searchPresentation.onExitComplete}
+            covered={!!activeGroupData || !libraryOpen || phase !== 'open'}
+          />
           </div>
         </div>
 

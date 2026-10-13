@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -75,9 +75,12 @@ class SearchService:
         provider_factory: Callable[[dict[str, Any]], Awaitable[Any] | Any],
         client: httpx.AsyncClient,
         config: dict[str, Any],
+        on_started: Callable[[str], None] | None = None,
     ) -> SourceOutcome:
         try:
             async with self._concurrency:
+                if on_started:
+                    on_started(source)
                 provider = await provider_factory(config)
                 if provider is None:
                     return SourceOutcome(source, "unconfigured", error_code="credential_missing")
@@ -120,6 +123,70 @@ class SearchService:
         api_key = self._get(config, "steamgriddb_api_key")
         return SteamGridDBProvider(api_key) if api_key else None
 
+    def _provider_factories(self) -> dict[str, Callable]:
+        return {"igdb": self._make_igdb, "bangumi": self._make_bangumi,
+                "vndb": self._make_vndb, "steamgriddb": self._make_steamgriddb}
+
+    async def search_events(self, query: str) -> AsyncIterator[dict[str, Any]]:
+        """Yield genuine queue/start/completion snapshots; disconnect cancels providers."""
+        value = query.strip() if isinstance(query, str) else ""
+        if not value or len(value) > 200:
+            raise ValueError("invalid search query")
+        started = time.perf_counter()
+        states = {source: {"source": source, "status": "waiting", "count": 0,
+                           "error_code": None} for source in SOURCE_NAMES}
+        results: list[dict[str, Any]] = []
+
+        def snapshot(event: str) -> dict[str, Any]:
+            return {"event": event, "query": value, "results": list(results),
+                    "sources": [dict(states[source]) for source in SOURCE_NAMES],
+                    "partial": any(state["status"] in {"partial", "error", "unconfigured"}
+                                   for state in states.values()),
+                    "elapsed_ms": int((time.perf_counter() - started) * 1000)}
+
+        yield snapshot("start")
+        config = await self._read_config()
+        queue: asyncio.Queue = asyncio.Queue()
+        providers = self._provider_factories()
+        timeout = httpx.Timeout(self.READ_TIMEOUT_SECONDS, connect=self.CONNECT_TIMEOUT_SECONDS)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+            async def run(source: str):
+                outcome = await self._provider_outcome(source, value, providers[source], client, config,
+                    on_started=lambda name: queue.put_nowait(name))
+                queue.put_nowait(outcome)
+
+            tasks = [asyncio.create_task(run(source)) for source in SOURCE_NAMES]
+            remaining = set(SOURCE_NAMES)
+            deadline = asyncio.get_running_loop().time() + self.TOTAL_TIMEOUT_SECONDS
+            try:
+                while remaining:
+                    try:
+                        if not queue.empty():
+                            update = queue.get_nowait()
+                        else:
+                            budget = deadline - asyncio.get_running_loop().time()
+                            if budget <= 0:
+                                break
+                            update = await asyncio.wait_for(queue.get(), timeout=budget)
+                    except asyncio.TimeoutError:
+                        break
+                    if isinstance(update, str):
+                        states[update] = {**states[update], "status": "searching"}
+                    else:
+                        remaining.discard(update.source)
+                        states[update.source] = update.to_dict()
+                        # Append arrival batches so visible covers never shuffle as others finish.
+                        results.extend(item.to_dict() for item in update.results)
+                    yield snapshot("update")
+                for source in remaining:
+                    states[source] = SourceOutcome(source, "error", error_code=f"{source}_total_timeout").to_dict()
+                yield snapshot("done")
+            finally:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+
     async def search_all(self, query: str) -> dict[str, Any]:
         value = query.strip() if isinstance(query, str) else ""
         if not value:
@@ -132,12 +199,7 @@ class SearchService:
             timeout=self.READ_TIMEOUT_SECONDS,
             connect=self.CONNECT_TIMEOUT_SECONDS,
         )
-        providers = {
-            "igdb": self._make_igdb,
-            "bangumi": self._make_bangumi,
-            "vndb": self._make_vndb,
-            "steamgriddb": self._make_steamgriddb,
-        }
+        providers = self._provider_factories()
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
             tasks = [
                 asyncio.create_task(

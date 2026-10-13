@@ -1,8 +1,10 @@
 (() => {
   'use strict';
 
+  const { useRef, useLayoutEffect } = React;
   const { t } = window.GameTierI18n;
   const {
+    useSlidingPill,
     LanguageSettings,
     SearchSettings,
     SteamSettings,
@@ -14,10 +16,68 @@
     AboutSettings,
     SettingsSectionHeading,
   } = window.GameTierApp;
+  function SettingsNavigation({ groups, activeSection, onSelect, enabled = true }) {
+    const buttonsRef = useRef({});
+    const items = groups.flatMap(group => group.items);
+    const selected = items.some(item => item.key === activeSection);
+    const visible = enabled && selected;
+    // One coordinate space keeps the same indicator alive across every category.
+    const pill = useSlidingPill({
+      selectedKey: activeSection,
+      layoutKey: JSON.stringify(groups),
+      visible,
+      buttonsRef,
+    });
+    const navigate = (event, key) => {
+      const index = items.findIndex(item => item.key === key);
+      let next;
+      if (event.key === 'ArrowDown') next = (index + 1) % items.length;
+      else if (event.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = items.length - 1;
+      else return;
+      event.preventDefault();
+      const nextKey = items[next].key;
+      onSelect(nextKey);
+      buttonsRef.current[nextKey]?.focus();
+    };
+    return (
+      <div ref={pill.hostRef} className="settings-nav-body"
+        onPointerMove={pill.onPointerMove} onPointerLeave={pill.onPointerLeave}>
+        {visible && (
+          <span ref={pill.pillRef} className="search-source-pill settings-nav-pill" aria-hidden="true">
+            <span className="search-pill-face" />
+          </span>
+        )}
+        {groups.map(group => (
+          <div key={group.key} className="settings-nav-group" data-settings-group={group.key} role="group" aria-label={group.label}>
+            <div className="settings-nav-group-label">{group.label}</div>
+            <div className="settings-nav-track">
+              {group.items.map(tab => (
+                <button key={tab.key} type="button"
+                  ref={node => {
+                    if (node) buttonsRef.current[tab.key] = node;
+                    else delete buttonsRef.current[tab.key];
+                  }}
+                  className={`btn btn-xs settings-nav-item ${activeSection === tab.key ? 'active' : ''}`}
+                  aria-current={activeSection === tab.key ? 'page' : undefined}
+                  data-settings-section={tab.key}
+                  onKeyDown={event => navigate(event, tab.key)}
+                  onClick={() => onSelect(tab.key)}>
+                  <span className="settings-nav-label">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   function SettingsPanel({
     island,
     logVisible,
     logAnchorRef,
+    logToolbarRef,
     preferencesModel,
     logsModel,
     settingsModel,
@@ -39,6 +99,44 @@
     } = preferencesModel;
     const { logOpen, logWidth, setLogOpen, unreadLogErrors } = logsModel;
     const { settingsOperation } = settingsModel;
+    const headerRef = useRef(null), closeRef = useRef(null), logButtonRef = useRef(null);
+    useLayoutEffect(() => {
+      const anchor = island?.anchorRef?.current, panel = island?.panelRef?.current;
+      const logAnchor = logToolbarRef?.current;
+      const header = headerRef.current, close = closeRef.current;
+      if (!anchor || !panel || !header || !close) return;
+      const align = () => {
+        const rect = anchor.getBoundingClientRect();
+        const logRect = logAnchor?.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const panelRight = (logVisible ?? logOpen) ? logWidth + 16 : 8;
+        // Read layout coordinates, not the island's temporary scale transform.
+        const style = getComputedStyle(panel);
+        const viewportWidth = document.documentElement.getBoundingClientRect().width;
+        const right = viewportWidth - panelRight - (parseFloat(style.borderRightWidth) || 0) - (logRect || rect).right;
+        const maxRight = Math.max(12, panel.clientWidth - rect.width - 180);
+        header.style.paddingRight = `${Math.max(12, Math.min(maxRight, right))}px`;
+        header.style.paddingTop = `${Math.max(10, rect.top - parseFloat(style.top) - (parseFloat(style.borderTopWidth) || 0))}px`;
+        close.style.width = `${rect.width}px`;
+        close.style.height = `${rect.height}px`;
+        close.style.minHeight = `${rect.height}px`;
+        if (logRect && logButtonRef.current) {
+          const logButton = logButtonRef.current;
+          logButton.style.width = `${logRect.width}px`;
+          logButton.style.height = `${logRect.height}px`;
+          logButton.style.minHeight = `${logRect.height}px`;
+          header.style.setProperty('--settings-action-gap', `${Math.max(0, logRect.left - rect.right)}px`);
+        }
+      };
+      align();
+      const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(align) : null;
+      observer?.observe(anchor); observer?.observe(panel);
+      if (logAnchor) observer?.observe(logAnchor);
+      const toolbar = anchor.closest('.top-toolbar');
+      if (toolbar) observer?.observe(toolbar);
+      window.addEventListener('resize', align, { passive: true });
+      return () => { observer?.disconnect(); window.removeEventListener('resize', align); };
+    }, [showSettings, island?.visible, island?.phase, island?.anchorRef, logToolbarRef, settingsWidth, logVisible, logOpen, logWidth]);
     return (
       (island ? island.visible : showSettings) && (
         <div
@@ -106,14 +204,8 @@
             />
             {/* Header */}
             <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '14px 18px',
-                borderBottom: '1px solid var(--divider-strong)',
-                flexShrink: 0,
-              }}
+              ref={headerRef}
+              className="settings-panel-header"
             >
               <span
                 style={{
@@ -123,32 +215,37 @@
               >
                 {t('settings.title')}
               </span>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
+              <div className="settings-panel-header-actions">
                 <button
-                  className={`btn btn-sm ${logOpen ? 'btn-primary' : ''}`}
+                  ref={closeRef}
+                  type="button"
+                  className="btn btn-icon btn-sm settings-panel-close"
+                  onClick={() => setShowSettings(false)}
+                  disabled={!!settingsOperation}
+                  aria-label={t('actions.close')}
+                  title={t('actions.close')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                    stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+                    <path d="M4 4l8 8M12 4l-8 8" />
+                  </svg>
+                </button>
+                <button
+                  ref={logButtonRef}
+                  type="button"
+                  className={`btn btn-sm settings-panel-log ${logOpen ? 'btn-primary' : ''}`}
+                  aria-label={t('logs.title')}
+                  aria-pressed={!!logOpen}
+                  title={logOpen ? t('logs.collapse') : t('logs.expand')}
                   onClick={(event) => {
                     if (logAnchorRef) logAnchorRef.current = event.currentTarget;
                     setLogOpen((open) => !open);
                   }}
                 >
-                  {logOpen ? t('logs.collapse') : t('logs.view')}
+                  {t('logs.title')}
                   {!logOpen && unreadLogErrors > 0 && (
                     <span className="log-unread-badge">{Math.min(unreadLogErrors, 99)}</span>
                   )}
-                </button>
-                <button
-                  className="btn btn-icon btn-sm"
-                  onClick={() => setShowSettings(false)}
-                  disabled={!!settingsOperation}
-                  aria-label={t('actions.close')}
-                >
-                  ✕
                 </button>
               </div>
             </div>
@@ -156,7 +253,10 @@
             <div className="settings-columns">
               {/* Left tab column */}
               <div className="settings-nav">
-                {[
+                <SettingsNavigation
+                  activeSection={settingsActiveSection} onSelect={setSettingsActiveSection}
+                  enabled={!island || island.phase === 'open'}
+                  groups={[
                   {
                     key: 'general',
                     label: t('settings.groups.general'),
@@ -212,20 +312,7 @@
                       },
                     ],
                   },
-                ].map((group) => (
-                  <div key={group.key} className="settings-nav-group">
-                    <div className="settings-nav-group-label">{group.label}</div>
-                    {group.items.map((tab) => (
-                      <button
-                        key={tab.key}
-                        className={`btn btn-xs settings-nav-item ${settingsActiveSection === tab.key ? 'active' : ''}`}
-                        onClick={() => setSettingsActiveSection(tab.key)}
-                      >
-                        <span className="settings-nav-label">{tab.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
+                ]} />
               </div>
               {/* Right content */}
               <div className="settings-content">
@@ -351,6 +438,7 @@
     );
   }
   Object.assign(window.GameTierApp, {
+    SettingsNavigation,
     SettingsPanel,
   });
 })();

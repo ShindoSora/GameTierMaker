@@ -54,6 +54,13 @@
   padding: 16px 14px 12px;
   border-bottom: 1px solid var(--border);
 }
+.library-upload-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.library-upload-main, .library-create-group { min-width: 0; }
+.library-upload-actions .btn {
+  justify-content: center; min-height: 44px; border-radius: 8px;
+  border-color: rgba(184,174,149,.5); font-size: 13px;
+}
+.library-upload-actions .btn > svg { flex-shrink: 0; }
 .library-panel.compact .library-search-row {
   flex-direction: column;
 }
@@ -62,7 +69,7 @@
   width: 100%; flex: none;
 }
 .library-panel.compact .library-upload-actions {
-  flex-direction: column;
+  grid-template-columns: minmax(0, 1fr);
 }
 .library-panel.compact .library-upload-main {
   width: 100%; min-width: 0; flex-direction: column;

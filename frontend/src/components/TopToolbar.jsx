@@ -3,6 +3,162 @@
 
   const { t } = window.GameTierI18n;
   const { TemplateSelector } = window.GameTierApp;
+  const { useState, useRef, useLayoutEffect } = React;
+
+  function createRenameMorph(root, trigger, fields) {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    let open = false, width = trigger.offsetWidth, velocity = 0, frame = 0, last = null;
+    let compact = width, expanded = fields.offsetWidth, elapsed = 0, disposed = false;
+    const paint = () => {
+      const progress = Math.max(0, Math.min(1, (width - compact) / Math.max(1, expanded - compact)));
+      root.style.width = `${Math.max(compact, width)}px`;
+      root.style.setProperty('--rename-reveal', String(Math.max(0, (progress - .12) / .88)));
+      root.style.setProperty('--rename-trigger', String(Math.max(0, 1 - progress * 4)));
+      root.style.setProperty('--rename-shift', `${(1 - progress) * 6}px`);
+      root.style.setProperty('--rename-radius', `${8 + progress * 8}px`);
+    };
+    const stop = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = 0; last = null;
+    };
+    const settle = () => {
+      stop(); width = open ? expanded : compact; velocity = 0;
+      paint(); root.style.willChange = 'auto';
+    };
+    const step = now => {
+      frame = 0;
+      if (disposed) return;
+      const dt = Math.max(.001, Math.min(.032, last === null ? 1 / 60 : (now - last) / 1000));
+      last = now; elapsed += dt;
+      const target = open ? expanded : compact;
+      const count = Math.ceil(dt * 120), h = dt / count;
+      for (let i = 0; i < count; i++) {
+        velocity += (380 * (target - width) - 29 * velocity) * h;
+        width += velocity * h;
+      }
+      paint();
+      if ((Math.abs(width - target) < .15 && Math.abs(velocity) < 1) || elapsed > 1.2) settle();
+      else frame = window.requestAnimationFrame(step);
+    };
+    const measure = () => {
+      if (disposed) return;
+      compact = trigger.offsetWidth;
+      expanded = Math.max(compact, fields.offsetWidth);
+      elapsed = 0;
+      if (media?.matches) { settle(); return; }
+      root.style.willChange = 'width';
+      if (!frame) { last = null; frame = window.requestAnimationFrame(step); }
+    };
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(trigger); observer?.observe(fields);
+    const motionChange = () => { if (media?.matches) settle(); };
+    media?.addEventListener?.('change', motionChange);
+    window.addEventListener('resize', measure, { passive: true });
+    paint();
+    return {
+      select(value) { open = value; measure(); },
+      dispose() {
+        disposed = true; stop(); observer?.disconnect();
+        media?.removeEventListener?.('change', motionChange);
+        window.removeEventListener('resize', measure);
+        root.style.willChange = 'auto';
+      },
+    };
+  }
+
+  function TemplateRename({ templateName, renameMode, setRenameMode, handleRenameTemplate }) {
+    const [draft, setDraft] = useState(templateName);
+    const [saving, setSaving] = useState(false);
+    const rootRef = useRef(null), triggerRef = useRef(null), fieldsRef = useRef(null);
+    const inputRef = useRef(null), morphRef = useRef(null), submittingRef = useRef(false);
+    const mountedRef = useRef(false), composingRef = useRef(false);
+    const previousOpenRef = useRef(false);
+    useLayoutEffect(() => {
+      mountedRef.current = true;
+      morphRef.current = createRenameMorph(rootRef.current, triggerRef.current, fieldsRef.current);
+      return () => { mountedRef.current = false; morphRef.current?.dispose(); };
+    }, []);
+    useLayoutEffect(() => {
+      const wasOpen = previousOpenRef.current;
+      previousOpenRef.current = renameMode;
+      morphRef.current?.select(renameMode);
+      if (renameMode) {
+        inputRef.current?.focus({ preventScroll: true });
+        inputRef.current?.select();
+      } else if (wasOpen) {
+        triggerRef.current?.focus({ preventScroll: true });
+      }
+    }, [renameMode]);
+    const cancel = () => { if (!submittingRef.current) setRenameMode(false); };
+    const save = async () => {
+      if (!renameMode || submittingRef.current || composingRef.current) return;
+      if (!draft.trim()) { inputRef.current?.focus({ preventScroll: true }); return; }
+      submittingRef.current = true; setSaving(true);
+      try {
+        await handleRenameTemplate(draft);
+      } finally {
+        submittingRef.current = false;
+        if (mountedRef.current) setSaving(false);
+      }
+    };
+    return (
+      <div ref={rootRef} className="template-rename" data-open={renameMode ? 'true' : 'false'}
+        onKeyDown={(event) => {
+          if (event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || composingRef.current) return;
+          if (event.key === 'Escape' && renameMode) { event.preventDefault(); event.stopPropagation(); cancel(); }
+        }}>
+        <button ref={triggerRef} type="button" className="btn btn-xs rename-trigger"
+          aria-expanded={renameMode} aria-hidden={renameMode || undefined} tabIndex={renameMode ? -1 : 0}
+          disabled={renameMode} onClick={() => { setDraft(templateName); setRenameMode(true); }}>
+          {t('actions.rename')}
+        </button>
+        <div ref={fieldsRef} className="rename-fields" aria-hidden={!renameMode} inert={renameMode ? undefined : ''}>
+          <input ref={inputRef} className="input toolbar-template-name" value={draft}
+            aria-label={t('template.renamePlaceholder')} placeholder={t('template.renamePlaceholder')}
+            disabled={!renameMode} readOnly={saving} onChange={(event) => setDraft(event.target.value)}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={() => { composingRef.current = false; }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || composingRef.current) return;
+              event.preventDefault(); event.stopPropagation(); save();
+            }} />
+          <button type="button" className="btn btn-xs rename-save" disabled={!renameMode || saving || !draft.trim()}
+            aria-busy={saving} onClick={save}>{t('actions.save')}</button>
+          <button type="button" className="btn btn-xs rename-cancel" disabled={!renameMode || saving}
+            onClick={cancel}>{t('actions.cancel')}</button>
+        </div>
+      </div>
+    );
+  }
+  function ThemeSwitch({ theme, toggleTheme }) {
+    return (
+      <div className="theme-switch" data-value={theme} role="group" aria-label={t('theme.label')}>
+        <span className="theme-switch-indicator" aria-hidden="true" />
+        {['dark', 'light'].map((value) => (
+          <button
+            key={value}
+            type="button"
+            className="theme-switch-option"
+            aria-pressed={theme === value}
+            onClick={() => { if (theme !== value) toggleTheme(); }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {value === 'dark' ? (
+                <path d="M20.9 13.2A8.6 8.6 0 0 1 10.8 3.1 8.6 8.6 0 1 0 20.9 13.2Z" />
+              ) : (
+                <>
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                </>
+              )}
+            </svg>
+            <span>{t(`theme.${value}`)}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
   function TopToolbar({
     templatesModel,
     tierBoardModel,
@@ -23,7 +179,6 @@
       handleDeleteTemplate,
       renameMode,
       templateName,
-      setTemplateName,
       handleRenameTemplate,
       setRenameMode,
     } = templatesModel;
@@ -31,6 +186,10 @@
     const { handleExport, exporting } = imagesModel;
     const { toggleTheme, theme, handleGlobalRefresh } = preferencesModel;
     const { backfill } = backfillModel;
+    const backfillProcessed = backfill ? backfill.ok + backfill.fail : 0;
+    const backfillTotal = backfill ? backfillProcessed + Math.max(0, backfill.remaining) + (backfill.retryPending || 0) : 0;
+    const backfillPercent = Math.round(backfillProcessed / Math.max(1, backfillTotal) * 100);
+    const backfillActive = backfill && !backfill.error && backfill.remaining !== 0;
     const { handleOpenSettings } = settingsModel;
     const { logOpen, setLogOpen, unreadLogErrors } = logsModel;
     return (
@@ -64,40 +223,8 @@
         {/* Rename group — also houses add-tier, export, theme */}
         <div className="toolbar-group toolbar-primary-actions">
           <span className="toolbar-caption">{t('template.label')}</span>
-          {renameMode && (
-            <input
-              autoFocus
-              className="input toolbar-template-name"
-              style={{
-                width: 130,
-                border: 'none',
-                background: 'transparent',
-              }}
-              placeholder={t('template.renamePlaceholder')}
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRenameTemplate();
-                if (e.key === 'Escape') setRenameMode(false);
-              }}
-            />
-          )}
-          <button
-            className="btn btn-xs"
-            onClick={() => (renameMode ? handleRenameTemplate() : setRenameMode(true))}
-          >
-            {renameMode ? t('actions.save') : t('actions.rename')}
-          </button>
-          {renameMode && (
-            <button
-              className="btn btn-xs btn-icon"
-              onClick={() => setRenameMode(false)}
-              aria-label={t('actions.cancel')}
-              title={t('actions.cancel')}
-            >
-              ✕
-            </button>
-          )}
+          <TemplateRename key={currentId} templateName={templateName} renameMode={renameMode}
+            setRenameMode={setRenameMode} handleRenameTemplate={handleRenameTemplate} />
           <div className="toolbar-separator" />
           <button className="btn btn-xs btn-primary" onClick={handleAddTier}>
             {t('tier.add')}
@@ -105,43 +232,7 @@
           <button className="btn btn-xs btn-primary" onClick={handleExport} disabled={exporting}>
             {t('actions.export')}
           </button>
-          <button
-            className="btn btn-xs btn-icon"
-            onClick={toggleTheme}
-            title={theme === 'dark' ? t('theme.light') : t('theme.dark')}
-          >
-            {theme === 'dark' ? (
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : (
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-              </svg>
-            )}
-          </button>
+          <ThemeSwitch theme={theme} toggleTheme={toggleTheme} />
           <button
             className="btn btn-xs btn-icon"
             onClick={handleGlobalRefresh}
@@ -172,6 +263,7 @@
         {backfill && (
           <div
             className="toolbar-group"
+            role="status"
             style={{
               gap: 8,
               padding: '3px 10px',
@@ -196,14 +288,14 @@
               >
                 <circle cx="12" cy="12" r="10" stroke="var(--border)" strokeWidth="2" fill="none" />
                 <path d="M12 2a10 10 0 019.95 9" strokeLinecap="round">
-                  <animateTransform
+                  {backfillActive && <animateTransform
                     attributeName="transform"
                     type="rotate"
                     from="0 12 12"
                     to="360 12 12"
                     dur="2s"
                     repeatCount="indefinite"
-                  />
+                  />}
                 </path>
               </svg>
               <span
@@ -214,12 +306,16 @@
                   whiteSpace: 'nowrap',
                 }}
               >
-                {backfill.remaining < 0
+                {backfill.source ? `${t(`sources.${backfill.source}`)} · ` : ''}
+                {backfill.error ? t('backfill.interrupted') : backfill.remaining < 0
                   ? t('backfill.checking')
                   : backfill.remaining > 0
                     ? t('backfill.running')
-                    : t('backfill.complete')}
+                    : backfill.retryPending > 0 ? t('backfill.partial') : t('backfill.complete')}
               </span>
+              {backfill.retryPending > 0 && <span style={{fontSize:10,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>
+                {t('backfill.retryPending', {count:backfill.retryPending})}
+              </span>}
               <span
                 style={{
                   fontSize: 11,
@@ -252,7 +348,7 @@
                 </span>
               )}
             </div>
-            {(backfill.remaining > 0 || backfill.remaining < 0) && (
+            {backfillActive && (
               <div
                 style={{
                   display: 'flex',
@@ -280,11 +376,7 @@
                       width:
                         backfill.remaining < 0
                           ? '100%'
-                          : Math.round(
-                              ((backfill.ok + backfill.fail) /
-                                Math.max(backfill.ok + backfill.fail + backfill.remaining, 1)) *
-                                100
-                            ) + '%',
+                          : backfillPercent + '%',
                       transition: backfill.remaining < 0 ? 'none' : 'width 0.3s ease',
                       animation:
                         backfill.remaining < 0 ? 'indeterminate 1.5s ease-in-out infinite' : 'none',
@@ -302,18 +394,14 @@
                 >
                   {backfill.remaining < 0
                     ? '...'
-                    : Math.round(
-                        ((backfill.ok + backfill.fail) /
-                          Math.max(backfill.ok + backfill.fail + backfill.remaining, 1)) *
-                          100
-                      ) + '%'}
+                    : backfillPercent + '%'}
                 </span>
               </div>
             )}
           </div>
         )}
 
-        <button ref={settingsAnchorRef} className="btn btn-sm" onClick={handleOpenSettings} title={t('settings.title')}>
+        <button ref={settingsAnchorRef} className="btn btn-sm settings-toolbar-button" onClick={handleOpenSettings} title={t('settings.title')}>
           <svg
             width="14"
             height="14"
@@ -328,7 +416,7 @@
         </button>
         <button
           ref={logToolbarRef}
-          className={`sidebar-toggle ${logOpen ? 'active' : ''}`}
+          className={`sidebar-toggle log-toolbar-button ${logOpen ? 'active' : ''}`}
           onClick={(event) => {
             if (logAnchorRef) logAnchorRef.current = event.currentTarget;
             setLogOpen((open) => !open);
@@ -355,6 +443,9 @@
     );
   }
   Object.assign(window.GameTierApp, {
+    createRenameMorph,
+    TemplateRename,
+    ThemeSwitch,
     TopToolbar,
   });
 })();

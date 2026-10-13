@@ -5,10 +5,11 @@
 import os
 import uuid
 import logging
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 from src.api.deps import get_manager, get_image_svc
@@ -125,9 +126,7 @@ async def upload_image(
                     logger.warning("清理上传临时文件失败: %s", candidate, exc_info=True)
 
 
-@router.post("/search")
-async def search_images(req: SearchRequest):
-    """Search all configured cover providers and preserve source metadata."""
+def _validated_search_query(req: SearchRequest) -> str:
     query = req.query.strip()
     if not query:
         raise InvalidInputError(
@@ -139,7 +138,25 @@ async def search_images(req: SearchRequest):
             "搜索关键词不能超过 200 个字符",
             code="search_query_too_long",
         )
-    return await SearchService().search_all(query)
+    return query
+
+
+@router.post("/search")
+async def search_images(req: SearchRequest):
+    """Search all configured cover providers and preserve source metadata."""
+    return await SearchService().search_all(_validated_search_query(req))
+
+
+@router.post("/search/stream")
+async def stream_search_images(req: SearchRequest):
+    query = _validated_search_query(req)
+
+    async def events():
+        async for event in SearchService().search_events(query):
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(events(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 @router.post("/download")

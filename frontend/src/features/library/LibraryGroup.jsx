@@ -22,7 +22,7 @@
     return getLibraryGroupPlatform(group)?.color || '#94A3B8';
   }
   function getLibraryGroupName(group) {
-    if (group.id === 'default_upload') return t('library.groups.searchResults');
+    if (group.id === 'default_upload') return t('library.groups.downloadedImages');
     if (group.id === 'local_upload') return t('library.groups.uploadedImages');
     const platform = getLibraryGroupPlatform(group);
     if (!platform) return group.name;

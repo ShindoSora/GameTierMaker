@@ -316,6 +316,7 @@
             island={settingsIsland}
             logVisible={logIsland.visible}
             logAnchorRef={logAnchorRef}
+            logToolbarRef={logToolbarRef}
             preferencesModel={preferencesModel}
             logsModel={logsModel}
             settingsModel={settingsModel}

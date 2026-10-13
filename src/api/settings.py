@@ -13,7 +13,7 @@ import re
 import requests
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 from src.core.config_handler import (
@@ -717,6 +717,46 @@ def backfill_platform_images(source: str = ""):
             code="backfill_source_invalid",
         )
     return _backfill_images_for_source(source)
+
+
+async def _backfill_image_events(mgr, source: str):
+    """Publish committed per-cover results, including the initial work count."""
+    ok = fail = deferred = 0
+    remaining, retry_pending = await run_in_threadpool(mgr.get_backfill_status, source)
+
+    def state(event):
+        return {"event": event, "source": source, "ok": ok, "fail": fail,
+                "deferred": deferred, "remaining": remaining, "retry_pending": retry_pending}
+
+    yield state("start")
+    try:
+        while remaining > 0:
+            # Each update follows the existing save/rollback transaction. A slow cover
+            # cannot hold back the progress of twenty already downloaded covers.
+            result = await run_in_threadpool(mgr.backfill_remote_images, limit=1, source=source)
+            ok += result[0]
+            fail += result[1]
+            deferred += result[2]
+            remaining, retry_pending = await run_in_threadpool(mgr.get_backfill_status, source)
+            yield state("update")
+        yield state("done")
+    except Exception:
+        logger.exception("图片回填进度流中断: source=%s", source)
+        yield {**state("error"), "error": "backfill_failed", "message": "图片同步下载中断"}
+
+
+@router.post("/images/backfill/stream")
+async def backfill_platform_images_stream(source: str = ""):
+    if source not in {"", "steam", "psn", "xbox", "nintendo"}:
+        raise InvalidInputError("图片回填来源不正确", code="backfill_source_invalid")
+    mgr = get_manager()
+
+    async def events():
+        async for event in _backfill_image_events(mgr, source):
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(events(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 def _backfill_images_for_source(source: str):

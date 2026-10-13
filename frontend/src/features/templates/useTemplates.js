@@ -156,16 +156,26 @@
       });
       await loadData();
     };
-    const handleRenameTemplate = async () => {
-      if (!templateName.trim() || !currentId) return;
-      await fetchAPI(`/templates/${currentId}/rename`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: templateName.trim(),
-        }),
-      });
-      await loadData();
-      setRenameMode(false);
+    const handleRenameTemplate = async (draft = templateName) => {
+      const name = draft.trim(), targetId = currentId;
+      const targetSequence = templateLoadSequenceRef.current;
+      if (!name || !targetId) return false;
+      try {
+        await fetchAPI(`/templates/${encodeURIComponent(targetId)}/rename`, {
+          method: 'PUT',
+          body: JSON.stringify({ name }),
+        });
+        // Renaming only changes the name, so keep the board and editor mounted.
+        setTemplates(items => items.map(item => item.id === targetId ? { ...item, name } : item));
+        if (selectedTemplateRef.current === targetId) {
+          setTemplateName(name);
+          if (templateLoadSequenceRef.current === targetSequence) setRenameMode(false);
+        }
+        return true;
+      } catch (error) {
+        showToast(getErrorMessage(error, 'errors.requestFailed'), 'error');
+        return false;
+      }
     };
     return {
       templates,
