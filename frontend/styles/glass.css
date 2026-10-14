@@ -1,4 +1,4 @@
-/* Clear glass: full optics at rest, restrained reflections while the shell transforms. */
+/* Background pixels pass through a curved lens; foreground content stays unfiltered. */
 :root {
   --liquid-glass-alpha: .75;
   --liquid-glass-rgb: 26, 30, 44;
@@ -63,7 +63,7 @@
   .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
 }
-/* The masked rim and displacement are only composited at rest. */
+/* The lighting rim is separate from the full-surface displacement pass. */
 :is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
   .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::before {
   z-index: 3; padding: var(--glass-rim-width);
@@ -78,11 +78,19 @@
   opacity: calc(.52 + var(--glass-presence) * .20);
   transition: opacity 240ms ease;
 }
-@supports (backdrop-filter: url("#liquid-glass-edge-refraction")) {
-  :is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
-    .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface)::before {
-    backdrop-filter: url("#liquid-glass-edge-refraction");
-  }
+:is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+  .context-menu, .confirm-dialog, .search-panel, .search-source-pill,
+  .glass-range-surface)[data-glass-optics="ready"] {
+  -webkit-backdrop-filter: var(--glass-refraction-filter);
+  backdrop-filter: var(--glass-refraction-filter);
+}
+:is(.settings-panel.island-panel, .log-sidebar.island-panel, .tier-color-dialog,
+  .context-menu, .confirm-dialog)[data-glass-optics="ready"] {
+  background: linear-gradient(145deg, rgba(255,255,255,.025), transparent 60%),
+    rgba(var(--liquid-glass-rgb), calc(var(--liquid-glass-alpha) * var(--liquid-glass-alpha)));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.22),
+    inset 2px 3px 7px rgba(215,232,255,.035), inset -2px -3px 8px rgba(3,6,16,.16),
+    0 12px 40px rgba(0,0,0,.22);
 }
 /* Keep the navigation's optical edge on its separator; the header owns the top edge. */
 .settings-nav::before { clip-path: inset(2px 0 2px calc(100% - 2px)); }
@@ -99,8 +107,8 @@
   .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface) > * {
   position: relative; z-index: 1;
 }
-/* Transformed mask/backdrop layers can flash a full-surface fan in WebView.
-   Keep the moving rim unmasked and inset-only; restore refraction when phase returns to open. */
+/* Keep the moving light rim unmasked to avoid WebView mask-compositing flashes.
+   The background lens stays on the host throughout the entire morph. */
 :is(.island-panel[data-island-state="opening"], .island-panel[data-island-state="closing"])::before,
 :is(.island-panel[data-island-state="opening"], .island-panel[data-island-state="closing"])
   :is(.settings-nav, .glass-range-surface)::before {
@@ -169,23 +177,58 @@
 .glass-toggle-row input { width: 18px; height: 18px; accent-color: var(--accent); }
 .glass-help { margin: 8px 0 24px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
 .glass-transparency-heading output { color: var(--accent); font-variant-numeric: tabular-nums; }
-#glass-transparency {
-  -webkit-appearance: none; appearance: none;
-  display: block; width: 100%; height: 6px; margin: 16px 0; border-radius: 999px;
+.glass-slider-control { position: relative; height: 40px; }
+.glass-slider-control::before {
+  content: ''; position: absolute; left: 16px; right: 16px; top: calc(50% - 3px);
+  height: 6px; border-radius: 999px; pointer-events: none;
   background: linear-gradient(to right, var(--accent) 0 var(--glass-range-progress),
     rgba(var(--glass-reflection-rgb),.16) var(--glass-range-progress) 100%);
+}
+#glass-transparency {
+  -webkit-appearance: none; appearance: none;
+  position: relative; z-index: 2; display: block; width: 100%; height: 40px;
+  margin: 0; padding: 0; border: 0; border-radius: 999px; background: transparent;
   cursor: pointer; accent-color: var(--accent);
 }
+#glass-transparency::-webkit-slider-runnable-track { height: 6px; background: transparent; }
+#glass-transparency::-moz-range-track { height: 6px; background: transparent; }
 #glass-transparency::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.65);
-  background: linear-gradient(140deg, rgba(255,255,255,.9), rgba(190,218,255,.72));
-  box-shadow: inset 0 1px 1px #fff, 0 2px 7px rgba(0,0,0,.22);
+  -webkit-appearance: none; width: 32px; height: 30px; margin-top: -12px;
+  border: 0; background: transparent; box-shadow: none;
 }
 #glass-transparency::-moz-range-thumb {
-  width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(255,255,255,.65);
-  background: linear-gradient(140deg, rgba(255,255,255,.9), rgba(190,218,255,.72));
-  box-shadow: inset 0 1px 1px #fff, 0 2px 7px rgba(0,0,0,.22);
+  width: 32px; height: 30px; border: 0; background: transparent; box-shadow: none;
+}
+.glass-range-thumb {
+  position: absolute; z-index: 3; top: 50%;
+  left: calc((100% - 32px) * var(--glass-slider-position) + 16px);
+  width: 32px; height: 30px; transform: translate(-50%, -50%);
+  pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.24));
+  transition: filter 140ms ease;
+}
+.glass-slider-lens {
+  position: absolute; inset: 0; border-radius: 9px;
+  clip-path: path('M10 1 L22 1 Q24 1 26 3 L29 6 Q31 8 31 10 L31 20 Q31 22 29 24 L26 27 Q24 29 22 29 L10 29 Q8 29 6 27 L3 24 Q1 22 1 20 L1 10 Q1 8 3 6 L6 3 Q8 1 10 1 Z');
+  background: radial-gradient(ellipse at var(--glass-light-x) var(--glass-light-y), rgba(255,255,255,.22), transparent 64%),
+    linear-gradient(145deg, rgba(var(--glass-reflection-rgb),.09), transparent 45%, rgba(var(--glass-reflection-rgb),.035));
+  -webkit-backdrop-filter: var(--glass-refraction-filter, saturate(1.15)) saturate(1.08);
+  backdrop-filter: var(--glass-refraction-filter, saturate(1.15)) saturate(1.08);
+  box-shadow: inset 1px 1px 2px rgba(255,255,255,.32), inset -1px -2px 3px rgba(0,0,0,.22);
+}
+.glass-range-thumb > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; fill: none; }
+.glass-thumb-depth { stroke: rgba(0,0,0,.3); stroke-width: 1.7; }
+.glass-thumb-rim { stroke: rgba(var(--glass-reflection-rgb),.42); stroke-width: 1; }
+.glass-thumb-highlight { stroke: rgba(255,255,255,.72); stroke-width: 1; stroke-linecap: round; }
+.glass-thumb-inner { stroke: rgba(var(--glass-reflection-rgb),.3); stroke-width: .7; }
+#glass-transparency:active + .glass-range-thumb { filter: drop-shadow(0 2px 3px rgba(0,0,0,.3)) brightness(1.06); }
+#glass-transparency:focus-visible + .glass-range-thumb { filter: drop-shadow(0 0 3px var(--accent)); }
+.glass-range-surface[data-disabled="true"] .glass-slider-control { opacity: .45; }
+[data-liquid-glass="off"] .glass-slider-lens { background: var(--bg-secondary); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media (prefers-reduced-motion: reduce) { .glass-range-thumb { transition: none; } }
+@media (forced-colors: active) {
+  .glass-range-thumb { display: none; }
+  .glass-slider-control::before { background: CanvasText; }
+  #glass-transparency::-webkit-slider-thumb { background: ButtonFace; border: 2px solid ButtonText; border-radius: 8px; }
+  #glass-transparency::-moz-range-thumb { background: ButtonFace; border: 2px solid ButtonText; border-radius: 8px; }
 }
 #glass-transparency:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
-#glass-transparency:disabled { opacity: .45; }

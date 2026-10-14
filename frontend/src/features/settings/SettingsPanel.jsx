@@ -16,6 +16,28 @@
     AboutSettings,
     SettingsSectionHeading,
   } = window.GameTierApp;
+  function GlassTransparencySlider({ value, enabled, onChange }) {
+    const position = Math.max(0, Math.min(80, Number(value) || 0)) / 80;
+    const shape = 'M10 1 L22 1 Q24 1 26 3 L29 6 Q31 8 31 10 L31 20 Q31 22 29 24 L26 27 Q24 29 22 29 L10 29 Q8 29 6 27 L3 24 Q1 22 1 20 L1 10 Q1 8 3 6 L6 3 Q8 1 10 1 Z';
+    return (
+      <div className="glass-range-surface" data-disabled={!enabled ? 'true' : 'false'}
+        style={{ '--glass-range-progress': `${position * 100}%`, '--glass-slider-position': position }}>
+        <div className="glass-slider-control">
+          <input id="glass-transparency" type="range" min="0" max="80" step="1"
+            value={value} disabled={!enabled} onChange={event => onChange(Number(event.target.value))} />
+          <span className="glass-range-thumb" aria-hidden="true">
+            <span className="glass-slider-lens" />
+            <svg viewBox="0 0 32 30" focusable="false">
+              <path className="glass-thumb-depth" d={shape} transform="translate(0 .6)" />
+              <path className="glass-thumb-rim" d={shape} />
+              <path className="glass-thumb-highlight" d="M2 13 L2 10 Q2 8 4 6 L7 3 Q9 1.5 11 1.5 L21 1.5 Q24 1.5 26 3.5 L28 5.5" />
+              <path className="glass-thumb-inner" d="M7 25 Q9 27 11 27 L21 27 Q23 27 25 25 L28 22" />
+            </svg>
+          </span>
+        </div>
+      </div>
+    );
+  }
   function SettingsNavigation({ groups, activeSection, onSelect, enabled = true }) {
     const buttonsRef = useRef({});
     const items = groups.flatMap(group => group.items);
@@ -149,9 +171,7 @@
             right: 0,
             zIndex: 3000,
           }}
-          onClick={() => {
-            if (!settingsOperation) setShowSettings(false);
-          }}
+          onClick={() => setShowSettings(false)}
         >
           <div ref={island?.backdropRef} className="settings-backdrop" />
           <div
@@ -221,7 +241,6 @@
                   type="button"
                   className="btn btn-icon btn-sm settings-panel-close"
                   onClick={() => setShowSettings(false)}
-                  disabled={!!settingsOperation}
                   aria-label={t('actions.close')}
                   title={t('actions.close')}
                 >
@@ -329,13 +348,8 @@
                       <label htmlFor="glass-transparency">{t('settings.glass.transparency')}</label>
                       <output htmlFor="glass-transparency">{preferencesModel.liquidGlassTransparency}%</output>
                     </div>
-                    <div className="glass-range-surface"
-                      style={{'--glass-range-progress': `${preferencesModel.liquidGlassTransparency / 80 * 100}%`}}>
-                      <input id="glass-transparency" type="range" min="0" max="80" step="1"
-                        value={preferencesModel.liquidGlassTransparency}
-                        disabled={!preferencesModel.liquidGlassEnabled}
-                        onChange={event => preferencesModel.setLiquidGlassTransparency(Number(event.target.value))} />
-                    </div>
+                    <GlassTransparencySlider value={preferencesModel.liquidGlassTransparency}
+                      enabled={preferencesModel.liquidGlassEnabled} onChange={preferencesModel.setLiquidGlassTransparency} />
                     <p className="glass-help">{t('settings.glass.hint')}</p>
                   </div>
                 )}
@@ -438,6 +452,7 @@
     );
   }
   Object.assign(window.GameTierApp, {
+    GlassTransparencySlider,
     SettingsNavigation,
     SettingsPanel,
   });

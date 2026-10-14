@@ -67,7 +67,7 @@ test('library groups keep source colors after reorder and prefix account names i
   env.load('core/display.js');
   env.load('features/library/LibraryGroup.jsx');
   const entries = [
-    {id:'default_upload', name:'搜索结果', color:'#A78BFA', title:'library.groups.searchResults'},
+    {id:'default_upload', name:'搜索结果', color:'#A78BFA', title:'library.groups.downloadedImages'},
     {id:'local_upload', name:'已上传图片', color:'#F5B942', title:'library.groups.uploadedImages'},
     {id:'psn_import_123', name:'玩家', color:'#00439C', title:'PS:玩家'},
     {id:'xbox:123', name:'玩家', color:'#107C10', title:'Xbox:玩家'},
@@ -140,6 +140,7 @@ test('library island opens from the button, reverses safely, and respects restor
   env.context.matchMedia=()=>media;
   env.app.SearchResults=()=>null;env.app.LibraryGroup=()=>null;
   env.load('core/display.js');
+  env.load('hooks/useSearchPanelMorph.js');
   env.load('features/library/LibraryPanel.jsx');
   const defaults={transform:'none',borderRadius:'32px',opacity:'1'};
   const panel={computed:{...defaults},getBoundingClientRect:()=>({left:48,top:8,width:420,height:704}),contains:()=>false};
@@ -292,7 +293,7 @@ test('settings and log islands retain closing panels, reverse from current geome
 test('minimizing search results retains image nodes and scroll container without rendering covers again', () => {
   const env=environment();let renderer,setData,nameReads=0;const selected=[];
   env.app.LibraryGroup=()=>null;
-  env.load('core/display.js');env.load('hooks/useSlidingPill.js');env.load('features/search/SearchResults.jsx');env.load('features/library/LibraryPanel.jsx');
+  env.load('core/display.js');env.load('hooks/useSlidingPill.js');env.load('hooks/useSearchPanelMorph.js');env.load('features/search/SearchResults.jsx');env.load('features/library/LibraryPanel.jsx');
   const data={results:Array.from({length:40},(_,i)=>({result_id:String(i),source:'vndb',cover:{url:`https://example.invalid/${i}.jpg`},get name(){nameReads++;return `Game ${i}`;}})),sources:[]};
   function Demo({template='A'}) {
     const [minimized,setMinimized]=React.useState(false),[results,updateData]=React.useState(data);setData=updateData;
@@ -312,7 +313,9 @@ test('minimizing search results retains image nodes and scroll container without
     assert.equal(renderer.root.findAllByType(env.app.SearchResults).length,1);
     assert.equal(renderer.root.findAllByType('img')[0],images[0]);
     const overlay=renderer.root.findAllByType('div').find(n=>n.props.className?.split(' ').includes('library-search-overlay'));
-    assert.equal(overlay.props['aria-hidden'],true);assert.equal(overlay.props.inert,'');
+    const content=renderer.root.findByProps({id:'search-results-content'});
+    assert.equal(overlay.props['aria-hidden'],false);
+    assert.equal(content.props['aria-hidden'],true);assert.equal(content.props.inert,'');
     assert.equal(renderer.root.findAll(node=>node.props.className==='search-source-pill').length,0);
     act(()=>button('library-search-restore').props.onClick());
     assert.equal(renderer.root.findByProps({id:'search-results-panel'}),panel);
@@ -692,7 +695,7 @@ test('search pill respects reduced motion and releases pending frames', () => {
 
 test('search source pill preserves filtering, fallback selection and keyboard navigation', () => {
   const env=environment();env.context.requestAnimationFrame=fn=>{fn();return 1;};
-  env.load('hooks/useSlidingPill.js');env.load('features/search/SearchResults.jsx');
+  env.load('hooks/useSlidingPill.js');env.load('hooks/useSearchPanelMorph.js');env.load('features/search/SearchResults.jsx');
   const data={results:[{id:'1',source:'bangumi',name:'one'},{id:'2',source:'vndb',name:'two'}],
     sources:[{source:'bangumi',count:1,status:'ok'},{source:'vndb',count:1,status:'ok'}]};
   const selected=[];let renderer;
@@ -781,6 +784,36 @@ test('glass switch attaches and tears down reflection listeners', () => {
   act(()=>renderer.update(React.createElement(env.app.LiquidGlassEffects,{enabled:false})));
   assert.equal(handlers.size,0);assert.equal(env.listeners.size,0);
   act(()=>renderer.unmount());
+});
+
+test('glass knob uses a curved face lens without drifting its center or changing the panel lens', () => {
+  const env=environment();env.load('core/glassRefraction.js');
+  const radii=[[9,9],[9,9],[9,9],[9,9]];
+  const flat=env.app.buildGlassDisplacementMap(33,31,radii);
+  const knob=env.app.buildGlassDisplacementMap(33,31,radii,1,1,true);
+  const pixel=(map,x,y)=>[...map.data.slice((y*map.mapWidth+x)*4,(y*map.mapWidth+x)*4+4)];
+  assert.deepEqual(pixel(knob,16,15),[128,128,128,255]);
+  assert.equal(pixel(flat,16,12)[1],128);assert.notEqual(pixel(knob,16,12)[1],128);
+  assert.ok(Math.abs(pixel(knob,16,12)[1]+pixel(knob,16,18)[1]-256)<=1);
+  assert.deepEqual([...flat.data],[...env.app.buildGlassDisplacementMap(33,31,radii,1,1,false).data]);
+  assert.ok(env.app.GLASS_OPTICAL_SURFACES.includes('.glass-slider-lens'));
+});
+
+test('polygon glass slider preserves the native range and persists transparency through the existing preferences hook', () => {
+  const env=environment();env.load('core/preferences.js');env.load('hooks/useUiPreferences.js');env.load('features/settings/SettingsPanel.jsx');
+  let preferences,renderer;
+  function Demo(){preferences=env.app.useUiPreferences();return React.createElement(env.app.GlassTransparencySlider,{
+    value:preferences.liquidGlassTransparency,enabled:preferences.liquidGlassEnabled,onChange:preferences.setLiquidGlassTransparency});}
+  act(()=>{renderer=Renderer.create(React.createElement(Demo));});
+  const input=()=>renderer.root.findByType('input');
+  assert.equal(input().props.type,'range');assert.equal(input().props.id,'glass-transparency');
+  assert.equal(input().props.min,'0');assert.equal(input().props.max,'80');assert.equal(input().props.step,'1');
+  assert.equal(renderer.root.findByProps({className:'glass-range-thumb'}).props['aria-hidden'],'true');
+  act(()=>input().props.onChange({target:{value:'58'}}));assert.equal(preferences.liquidGlassTransparency,58);
+  assert.equal(renderer.root.findByProps({className:'glass-range-surface'}).props.style['--glass-slider-position'],58/80);
+  act(()=>preferences.setLiquidGlassEnabled(false));assert.equal(input().props.disabled,true);
+  act(()=>renderer.unmount());act(()=>{renderer=Renderer.create(React.createElement(Demo));});
+  assert.equal(input().props.value,58);assert.equal(input().props.disabled,true);act(()=>renderer.unmount());
 });
 
 test('glass preferences apply immediately and survive remount', () => {
@@ -1011,13 +1044,16 @@ test('log source tabs support keyboard navigation and both locales', () => {
 
 test('backfill serializes sources and refreshes the current template',async()=>{
   const env=environment({setTimeout:()=>1,clearTimeout(){}}),first=deferred(),calls=[],refreshed=[];
-  env.app.fetchAPI=(url)=>{calls.push(url);return calls.length===1?first.promise:Promise.resolve({ok:1,fail:0,remaining:0});};
+  env.app.fetchBackfillStream=async(url,options,publish)=>{
+    calls.push(url);if(calls.length===1)await first.promise;
+    publish({event:'done',ok:1,fail:0,deferred:0,remaining:0,retry_pending:0});
+  };
   env.load('features/images/useImageBackfill.js');let active='A';
   const h=mount(env.app.useImageBackfill,{getCurrentTemplate:()=>({currentId:active,loadCurrentTemplate:async id=>refreshed.push(id)})});
   let job;act(()=>{job=h.value.runBackfill('steam');h.value.runBackfill('psn');});
   assert.equal(calls.length,1);active='B';
   await act(async()=>{first.resolve({ok:1,fail:0,remaining:0});await job;});
-  assert.deepEqual(calls,['/settings/images/backfill?source=steam','/settings/images/backfill?source=psn']);assert.deepEqual(refreshed,['B']);h.unmount();
+  assert.deepEqual(calls,['/settings/images/backfill/stream?source=steam','/settings/images/backfill/stream?source=psn']);assert.deepEqual(refreshed,['B']);h.unmount();
 });
 
 test('Steam callback accepts only the expected same-origin operation and deduplicates completion',async()=>{
@@ -1094,10 +1130,50 @@ test('Steam polling stops after repeated completion failures and preserves the p
 
 test('backfill unmount aborts the active request and does not start queued work',async()=>{
   const env=environment(),pending=deferred(),requests=[];
-  env.app.fetchAPI=(url,options)=>{requests.push({url,options});return pending.promise;};
+  env.app.fetchBackfillStream=(url,options)=>{requests.push({url,options});return pending.promise;};
   env.load('features/images/useImageBackfill.js');
   const h=mount(env.app.useImageBackfill,{getCurrentTemplate:()=>{throw Error('must not refresh after unmount');}});
   let job;act(()=>{job=h.value.runBackfill('steam');h.value.runBackfill('psn');});
   h.unmount();assert.equal(requests[0].options.signal.aborted,true);
   pending.resolve({ok:1,fail:0,remaining:1});await job;assert.equal(requests.length,1);
+});
+
+test('backfill exposes each streamed count before completion and never switches to batch work',async()=>{
+  const env=environment({setTimeout:()=>1,clearTimeout(){}}),wait=deferred();let publish,refreshed=false;
+  env.app.fetchBackfillStream=(url,options,callback)=>{publish=callback;return wait.promise;};
+  env.app.fetchAPI=()=>assert.fail('legacy batch work must never run');
+  env.load('features/images/useImageBackfill.js');
+  const h=mount(env.app.useImageBackfill,{getCurrentTemplate:()=>({currentId:'A',loadCurrentTemplate:async()=>{refreshed=true;}})});
+  let job;act(()=>{job=h.value.runBackfill('xbox');});
+  for(let count=0;count<3;count++){
+    act(()=>publish({event:count?'update':'start',ok:count,fail:0,deferred:0,remaining:40-count,retry_pending:0}));
+    assert.equal(h.value.backfill.ok,count);assert.equal(h.value.backfill.remaining,40-count);assert.equal(refreshed,false);
+  }
+  await act(async()=>{publish({event:'done',ok:40,fail:0,deferred:0,remaining:0,retry_pending:0});wait.resolve();await job;});
+  assert.equal(h.value.backfill.ok,40);assert.equal(refreshed,true);h.unmount();
+});
+
+test('backfill missing stream stays visible as restart-required and never falls back to 20-image batches',async()=>{
+  for(const status of [404,405,'missing-helper']){
+    const env=environment({setTimeout:()=>assert.fail('restart warning must not auto-hide'),console:{...console,error(){}}}),toasts=[];
+    if(status!=='missing-helper')env.app.fetchBackfillStream=async()=>{throw Object.assign(Error('old backend'),{status});};
+    env.app.fetchAPI=()=>assert.fail('old batch endpoint must not be called');env.app.showToast=message=>toasts.push(message);
+    env.load('features/images/useImageBackfill.js');
+    const h=mount(env.app.useImageBackfill,{getCurrentTemplate:()=>assert.fail('no download took place')});
+    await act(async()=>{const job=h.value.runBackfill('xbox');h.value.runBackfill('steam');await job;});
+    assert.equal(h.value.backfill.requiresRestart,true);assert.equal(h.value.backfill.ok,0);
+    assert.deepEqual(toasts,['backfill.restartRequired']);h.unmount();
+  }
+});
+
+test('backfill interruption keeps the last actual counts without starting duplicate batch work',async()=>{
+  const env=environment({setTimeout:()=>1,clearTimeout(){},console:{...console,error(){}}});
+  env.app.fetchBackfillStream=async(url,options,publish)=>{
+    publish({event:'update',ok:2,fail:0,deferred:0,remaining:38,retry_pending:0});
+    throw Object.assign(Error('interrupted'),{status:404});
+  };
+  env.app.fetchAPI=()=>assert.fail('started streams must never fall back');env.load('features/images/useImageBackfill.js');
+  const h=mount(env.app.useImageBackfill,{getCurrentTemplate:()=>({})});
+  await act(async()=>{await h.value.runBackfill('xbox');});
+  assert.equal(h.value.backfill.ok,2);assert.equal(h.value.backfill.error,true);assert.equal(h.value.backfill.requiresRestart,false);h.unmount();
 });

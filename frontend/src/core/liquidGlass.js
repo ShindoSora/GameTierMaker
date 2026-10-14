@@ -2,7 +2,7 @@
   'use strict';
 
   const GLASS_SURFACES = '.settings-panel.island-panel, .log-sidebar.island-panel, '
-    + '.tier-color-dialog, .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface';
+    + '.tier-color-dialog, .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface, .search-panel, .search-source-pill';
   const LIGHT_PROPERTIES = ['--glass-light-x', '--glass-light-y', '--glass-light-angle', '--glass-presence'];
 
   function getGlassLight(bounds, clientX, clientY) {
@@ -12,6 +12,7 @@
   }
 
   function createLiquidGlassController() {
+    const stopRefraction = window.GameTierApp.createGlassRefractionController?.();
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     const touched = new Set(), positions = new Map();
     let active = [], point = null, frame = 0, disposed = false;
@@ -75,6 +76,7 @@
     window.addEventListener('blur', reset);
     media?.addEventListener?.('change', motionChange);
     return () => {
+      stopRefraction?.();
       disposed = true; reset();
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerout', leave);
@@ -89,18 +91,7 @@
 
   function LiquidGlassEffects({enabled}) {
     React.useEffect(() => enabled ? createLiquidGlassController() : undefined, [enabled]);
-    return (
-      <svg width="0" height="0" aria-hidden="true" focusable="false"
-        style={{position:'absolute', pointerEvents:'none'}}>
-        <defs>
-          <filter id="liquid-glass-edge-refraction" x="-10%" y="-10%" width="120%" height="120%"
-            colorInterpolationFilters="sRGB">
-            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.045" numOctaves="1" seed="8" result="edge-map" />
-            <feDisplacementMap in="SourceGraphic" in2="edge-map" scale="3.5" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-        </defs>
-      </svg>
-    );
+    return null;
   }
 
   Object.assign(window.GameTierApp, {getGlassLight, createLiquidGlassController, LiquidGlassEffects});

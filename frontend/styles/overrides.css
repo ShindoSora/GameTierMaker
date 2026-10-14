@@ -15,10 +15,15 @@
 .top-toolbar .toolbar-group { padding:4px; gap:3px; }
 .top-toolbar .toolbar-group .input { min-height:32px; }
 .top-toolbar .toolbar-group .btn { min-height:32px; }
-.toolbar-group.toolbar-primary-actions { border-color:rgba(91,156,245,0.2); }
-.toolbar-group.toolbar-primary-actions .btn-success { background:var(--accent); color:#fff; }
-.toolbar-group.toolbar-primary-actions .btn-success:hover { background:var(--accent-hover); }
-.toolbar-caption { padding:0 4px; color:var(--text-secondary); font-size:11px; font-weight:600; white-space:nowrap; }
+.toolbar-group.toolbar-primary-actions { border-color:var(--border); }
+.toolbar-group.toolbar-primary-actions .btn-success { background:var(--action); color:#fff; }
+.toolbar-group.toolbar-primary-actions .btn-success:hover { background:var(--action-hover); }
+.toolbar-template-actions .template-create { color:var(--text-primary); }
+.toolbar-template-actions .template-remove { color:var(--text-secondary); }
+.toolbar-template-actions .template-remove:hover { color:var(--danger); background:rgba(240,96,96,0.10); }
+.toolbar-primary-actions .toolbar-add-tier { color:var(--accent); background:var(--accent-glow); }
+.toolbar-primary-actions .toolbar-add-tier:hover { color:var(--accent-hover); background:var(--control-hover); }
+.toolbar-caption { padding:0 4px; color:var(--text-secondary); font-size:11px; font-weight:500; white-space:nowrap; }
 .template-rename {
   position: relative;
   flex: 0 0 auto;

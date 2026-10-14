@@ -199,22 +199,16 @@
           <TemplateSelector templates={templates} currentId={currentId} onSelect={switchTemplate} />
           <div className="toolbar-separator" />
           <button
-            className="btn btn-xs template-action-button"
+            className="btn btn-xs template-action-button template-create"
             onClick={handleCreateTemplate}
             title={t('template.create')}
-            style={{
-              color: 'var(--success)',
-            }}
           >
             {t('template.add')}
           </button>
           <button
-            className="btn btn-xs template-action-button"
+            className="btn btn-xs template-action-button template-remove"
             onClick={handleDeleteTemplate}
             title={t('template.delete')}
-            style={{
-              color: 'var(--danger)',
-            }}
           >
             {t('template.remove')}
           </button>
@@ -226,10 +220,10 @@
           <TemplateRename key={currentId} templateName={templateName} renameMode={renameMode}
             setRenameMode={setRenameMode} handleRenameTemplate={handleRenameTemplate} />
           <div className="toolbar-separator" />
-          <button className="btn btn-xs btn-primary" onClick={handleAddTier}>
+          <button className="btn btn-xs toolbar-add-tier" onClick={handleAddTier}>
             {t('tier.add')}
           </button>
-          <button className="btn btn-xs btn-primary" onClick={handleExport} disabled={exporting}>
+          <button className="btn btn-xs btn-primary toolbar-export" onClick={handleExport} disabled={exporting}>
             {t('actions.export')}
           </button>
           <ThemeSwitch theme={theme} toggleTheme={toggleTheme} />
@@ -307,7 +301,7 @@
                 }}
               >
                 {backfill.source ? `${t(`sources.${backfill.source}`)} · ` : ''}
-                {backfill.error ? t('backfill.interrupted') : backfill.remaining < 0
+                {backfill.requiresRestart ? t('backfill.updateRequired') : backfill.error ? t('backfill.interrupted') : backfill.remaining < 0
                   ? t('backfill.checking')
                   : backfill.remaining > 0
                     ? t('backfill.running')

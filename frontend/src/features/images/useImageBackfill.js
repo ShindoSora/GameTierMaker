@@ -3,7 +3,7 @@
 
   const { useState, useRef, useEffect } = React;
   const { t } = window.GameTierI18n;
-  const { fetchAPI, fetchBackfillStream, showToast } = window.GameTierApp;
+  const { fetchBackfillStream, showToast } = window.GameTierApp;
   function useImageBackfill({ getCurrentTemplate }) {
     const [backfill, setBackfill] = useState(null);
     const backfillRunningRef = useRef(false);
@@ -11,6 +11,7 @@
     const backfillClearTimerRef = useRef(null);
     const disposedRef = useRef(false);
     const requestRef = useRef(null);
+    const restartRequiredRef = useRef(false);
     useEffect(() => {
       disposedRef.current = false;
       return () => {
@@ -21,7 +22,7 @@
       };
     }, []);
     const runBackfill = async (source = '') => {
-      if (disposedRef.current) return;
+      if (disposedRef.current || restartRequiredRef.current) return;
       backfillPendingSourcesRef.current.add(source || '');
       if (backfillRunningRef.current) return;
       backfillRunningRef.current = true;
@@ -29,13 +30,11 @@
         clearTimeout(backfillClearTimerRef.current);
         backfillClearTimerRef.current = null;
       }
+      let requiresRestart = false;
       try {
         while (!disposedRef.current && backfillPendingSourcesRef.current.size > 0) {
           const currentSource = backfillPendingSourcesRef.current.values().next().value;
           backfillPendingSourcesRef.current.delete(currentSource);
-          let ok = 0,
-            fail = 0,
-            deferred = 0;
           setBackfill({
             source: currentSource,
             ok: 0,
@@ -44,52 +43,26 @@
           });
           try {
             const sourceQuery = currentSource ? `?source=${encodeURIComponent(currentSource)}` : '';
-            let streamed = false;
             let retryPending = 0;
-            if (fetchBackfillStream) {
-              const controller = new AbortController();
-              requestRef.current = controller;
-              let received = false;
-              try {
-                await fetchBackfillStream(`/settings/images/backfill/stream${sourceQuery}`, {
-                  method: 'POST', signal: controller.signal,
-                }, event => {
-                  if (disposedRef.current || controller.signal.aborted || requestRef.current !== controller) return;
-                  received = true;
-                  ok = event.ok; fail = event.fail; deferred = event.deferred;
-                  retryPending = event.retry_pending;
-                  setBackfill({ source: currentSource, ok, fail, deferred, retryPending, remaining: event.remaining });
-                });
-                streamed = true;
-              } catch (error) {
-                // A running older backend may not have the new endpoint yet.
-                if (received || ![404, 405].includes(error.status)) throw error;
-              }
-            }
-            while (!disposedRef.current && !streamed) {
-              const controller = new AbortController();
-              requestRef.current = controller;
-              const res = await fetchAPI(`/settings/images/backfill${sourceQuery}`, {
-                method: 'POST',
-                signal: controller.signal,
+            const outdatedBackend = () => Object.assign(new Error(t('backfill.restartRequired')), {code:'backfill_update_required'});
+            if (!fetchBackfillStream) throw outdatedBackend();
+            const controller = new AbortController();
+            requestRef.current = controller;
+            let received = false;
+            try {
+              await fetchBackfillStream(`/settings/images/backfill/stream${sourceQuery}`, {
+                method: 'POST', signal: controller.signal,
+              }, event => {
+                if (disposedRef.current || controller.signal.aborted || requestRef.current !== controller) return;
+                received = true;
+                retryPending = event.retry_pending;
+                setBackfill({ source: currentSource, ok:event.ok, fail:event.fail, deferred:event.deferred,
+                  retryPending, remaining:event.remaining });
               });
-              if (disposedRef.current) return;
-              ok += res.ok;
-              fail += res.fail;
-              deferred += Number(res.deferred || 0);
-              retryPending = Number(res.retry_pending || 0);
-              setBackfill({
-                source: currentSource,
-                ok,
-                fail,
-                deferred,
-                retryPending,
-                remaining: res.remaining,
-              });
-              if (res.remaining === 0) {
-                break;
-              }
-              await new Promise((resolve) => setTimeout(resolve, 150));
+            } catch (error) {
+              // Never silently restore the 20-cover batches behind a live-progress UI.
+              if (!received && [404, 405].includes(error.status)) throw outdatedBackend();
+              throw error;
             }
             if (!disposedRef.current && retryPending > 0) {
               showToast(t('backfill.deferred', { count: retryPending }), 'error');
@@ -97,11 +70,16 @@
           } catch (error) {
             if (disposedRef.current) return;
             console.error('图片回填失败:', error);
-            setBackfill(previous => ({ ...previous, error: true }));
-            showToast(t('backfill.interrupted'), 'error');
+            requiresRestart = error.code === 'backfill_update_required';
+            if (requiresRestart) {
+              restartRequiredRef.current = true;
+              backfillPendingSourcesRef.current.clear();
+            }
+            setBackfill(previous => ({ ...previous, error: true, requiresRestart }));
+            showToast(t(requiresRestart ? 'backfill.restartRequired' : 'backfill.interrupted'), 'error');
           }
         }
-        if (disposedRef.current) return;
+        if (disposedRef.current || requiresRestart) return;
         const { currentId, loadCurrentTemplate } = getCurrentTemplate();
         if (currentId) await loadCurrentTemplate(currentId);
         if (disposedRef.current) return;
