@@ -67,6 +67,7 @@ KNOWN_COVER_HOST_SUFFIXES = (
     "store-images.s-microsoft.com",
     "store-images.microsoft.com",
     "assets.xboxservices.com",
+    "images-eds-ssl.xboxlive.com",
     "image.api.playstation.com",
     "image.api.np.km.playstation.net",
     "app-api.znej.nintendo.com",
@@ -280,6 +281,7 @@ def _validate_connected_peer(
     response: requests.Response,
     *,
     allow_transparent_proxy: bool = False,
+    local_proxy: str | None = None,
 ) -> None:
     """Verify the actual socket peer after DNS resolution and connection."""
     connection = getattr(response.raw, "_connection", None)
@@ -296,18 +298,50 @@ def _validate_connected_peer(
             code="remote_image_peer_unavailable",
         )
     try:
-        peer = sock.getpeername()[0]
+        peer_info = sock.getpeername()
+        peer = peer_info[0]
     except (OSError, TypeError, IndexError) as exc:
         raise RemoteResponseError(
             "无法确认远程图片服务器地址",
             code="remote_image_peer_unavailable",
         ) from exc
+    if local_proxy:
+        proxy = urlsplit(local_proxy)
+        expected_ip = ipaddress.ip_address(proxy.hostname or "")
+        expected_port = proxy.port or (443 if proxy.scheme == "https" else 80)
+        if (not allow_transparent_proxy or not expected_ip.is_loopback
+                or ipaddress.ip_address(peer) != expected_ip or peer_info[1] != expected_port):
+            raise RemoteResponseError("图片代理连接地址不正确", code="remote_image_proxy_peer_invalid")
+        return
     _validate_public_ip(peer, allow_transparent_proxy=allow_transparent_proxy)
 
 
 def _is_known_cover_host(hostname: str) -> bool:
     host = hostname.rstrip(".").lower()
     return any(host == suffix or host.endswith("." + suffix) for suffix in KNOWN_COVER_HOST_SUFFIXES)
+
+
+def _get_local_cover_proxy(url: str) -> str | None:
+    target = urlsplit(url)
+    if (target.scheme != "https" or target.port not in (None, 443)
+            or not _is_known_cover_host(target.hostname or "")):
+        return None
+    # requests obtains Windows Internet Settings as well as environment proxies;
+    # its normal NO_PROXY rules remain respected here.
+    proxy_url = requests.utils.select_proxy(url, requests.utils.get_environ_proxies(url))
+    if not proxy_url:
+        return None
+    try:
+        proxy = urlsplit(proxy_url)
+        address = ipaddress.ip_address(proxy.hostname or "")
+        port = proxy.port or (443 if proxy.scheme == "https" else 80)
+        if (proxy.scheme not in {"http", "https"} or not address.is_loopback
+                or not 1 <= port <= 65535 or proxy.username or proxy.password
+                or proxy.path not in ("", "/") or proxy.query or proxy.fragment):
+            return None
+    except (ValueError, TypeError):
+        return None
+    return proxy_url
 
 
 def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
@@ -331,8 +365,8 @@ def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
     )
 
     session = requests.Session()
-    # Ignore machine-wide proxy settings: otherwise DNS validation would
-    # cover the requested host while the proxy could connect elsewhere.
+    # Never inherit arbitrary machine proxies. Built-in cover CDN hosts
+    # may opt into a validated loopback proxy, selected again at every redirect.
     session.trust_env = False
     response = None
     try:
@@ -341,6 +375,9 @@ def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
             hostname = urlsplit(current_url).hostname or ""
             if not _is_known_cover_host(hostname):
                 logger.debug("远程图片来自非内置 CDN: %s", hostname)
+            local_proxy = _get_local_cover_proxy(current_url)
+            if local_proxy:
+                logger.info("封面下载使用已配置的本机代理: %s", hostname)
 
             try:
                 response = session.get(
@@ -349,6 +386,7 @@ def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
                     stream=True,
                     timeout=(10, 30),
                     headers={"Accept": "image/jpeg,image/png,image/webp,image/gif,image/bmp"},
+                    proxies={"https": local_proxy} if local_proxy else {},
                 )
             except requests.exceptions.Timeout as exc:
                 raise RemoteTimeoutError(
@@ -364,6 +402,7 @@ def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
             _validate_connected_peer(
                 response,
                 allow_transparent_proxy=_is_known_cover_host(hostname),
+                local_proxy=local_proxy,
             )
 
             if response.status_code in {301, 302, 303, 307, 308}:

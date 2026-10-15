@@ -3,6 +3,12 @@
 
   const { useState, useRef, useEffect } = React;
   const { t } = window.GameTierI18n;
+  function getSelectedLogText(list) {
+    const selection = window.getSelection?.();
+    if (!list || !selection || selection.isCollapsed || !selection.rangeCount
+      || !list.contains(selection.anchorNode) || !list.contains(selection.focusNode)) return '';
+    return selection.toString();
+  }
   function LogSidebar({
     island,
     width,
@@ -21,12 +27,38 @@
       () => new Set(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
     );
     const [autoScroll, setAutoScroll] = useState(true);
+    const [selectionMenu, setSelectionMenu] = useState(null);
     const listRef = useRef(null);
-    useEffect(() => setAutoScroll(true), [source]);
+    useEffect(() => { setAutoScroll(true); setSelectionMenu(null); }, [source]);
+    useEffect(() => { if (island?.phase === 'closing') setSelectionMenu(null); }, [island?.phase]);
     useEffect(() => {
-      if (!autoScroll || !listRef.current) return;
+      if (!autoScroll || !listRef.current || getSelectedLogText(listRef.current)) return;
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }, [entries, autoScroll]);
+    useEffect(() => {
+      if (!selectionMenu) return;
+      const close = () => setSelectionMenu(null);
+      const escape = event => { if (event.key === 'Escape') close(); };
+      document.addEventListener('pointerdown', close);
+      document.addEventListener('keydown', escape);
+      window.addEventListener('resize', close);
+      return () => {
+        document.removeEventListener('pointerdown', close);
+        document.removeEventListener('keydown', escape);
+        window.removeEventListener('resize', close);
+      };
+    }, [selectionMenu]);
+    const copySelection = async () => {
+      const text = selectionMenu?.text;
+      setSelectionMenu(null);
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        window.GameTierApp.showToast(t('logs.selectionCopied'), 'success');
+      } catch (_) {
+        window.GameTierApp.showToast(t('logs.copyFailed'), 'error');
+      }
+    };
     const toggleLevel = (level) => {
       setEnabledLevels((previous) => {
         const next = new Set(previous);
@@ -138,7 +170,17 @@
           role="tabpanel"
           aria-labelledby={`log-tab-${source}`}
           ref={listRef}
+          tabIndex={0}
+          onMouseDown={event => { if (event.button === 0) setAutoScroll(false); }}
+          onContextMenu={event => {
+            const text = getSelectedLogText(listRef.current);
+            if (!text) return;
+            event.preventDefault(); event.stopPropagation();
+            setSelectionMenu({text, x:Math.max(0, Math.min(event.clientX, window.innerWidth - 180)),
+              y:Math.max(0, Math.min(event.clientY, window.innerHeight - 48))});
+          }}
           onScroll={(event) => {
+            if (getSelectedLogText(listRef.current)) return;
             const el = event.currentTarget;
             const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
             if (atBottom !== autoScroll) setAutoScroll(atBottom);
@@ -171,15 +213,28 @@
               count: entries.length,
             })}
           </span>
-          <button className="btn btn-xs tail" onClick={() => setAutoScroll(true)}>
+          <button className="btn btn-xs tail" onClick={() => {
+            if (getSelectedLogText(listRef.current)) window.getSelection()?.removeAllRanges();
+            setAutoScroll(true);
+          }}>
             {autoScroll ? t('logs.autoScroll') : t('logs.backToBottom')}
           </button>
         </div>
+        {selectionMenu && ReactDOM.createPortal(
+          <div className="context-menu log-selection-menu" role="menu" aria-label={t('logs.copySelected')}
+            style={{left:selectionMenu.x, top:selectionMenu.y}}
+            onPointerDown={event => event.stopPropagation()} onContextMenu={event => event.preventDefault()}>
+            <button type="button" className="context-menu-item" role="menuitem" autoFocus onClick={copySelection}>
+              {t('logs.copySelected')}
+            </button>
+          </div>, document.body
+        )}
         </div>
       </aside>
     );
   }
   Object.assign(window.GameTierApp, {
+    getSelectedLogText,
     LogSidebar,
   });
 })();

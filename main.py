@@ -468,6 +468,7 @@ def _run_webview(url="http://127.0.0.1:8000", title="Game Tier Maker"):
     desktop_api = DesktopApi()
     webview.create_window(title, url, width=1280, height=820,
                           min_size=(900, 600), confirm_close=False,
+                          text_select=True,
                           js_api=desktop_api)
     webview.start()
 
