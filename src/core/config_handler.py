@@ -142,6 +142,10 @@ class ConfigHandler:
         return self.steamgriddb_api_key
         
     def get_psn_npsso(self):
+        from src.core.platform_credentials import read_credentials
+        protected = read_credentials("psn")
+        if protected.get("npsso"):
+            return protected["npsso"]
         data = read_json_with_backup(
             self.config_path,
             validator=validate_json_object,
@@ -162,6 +166,10 @@ class ConfigHandler:
         return self.psn_online_id
 
     def get_xbox_data(self):
+        from src.core.platform_credentials import read_credentials
+        protected = read_credentials("xbox")
+        if protected.get("oauth"):
+            return protected["oauth"]
         path = self.get_xbox_tokens_path()
         data = read_json_with_backup(path, validator=validate_json_object)
         return json.dumps(data, ensure_ascii=False)

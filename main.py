@@ -1,14 +1,20 @@
 """
-Game Tier Maker — FastAPI Backend + Webview 桌面端
+Game Tier Maker — 本地网页 + 可选 Webview 桌面端
 ==================================================
 启动方式:
-  python main.py                → 开发模式（浏览器 + 热重载）
-  python main.py --debug        → 调试模式（浏览器打开 + DEBUG 日志）
-  python main.py --no-browser   → 仅启动后端，不打开任何窗口
-  main.exe                      → 桌面应用（打包后，嵌入式 webview 窗口）
+  python main.py                → 本地网页服务（左侧可操作浏览器面板）
+  python main.py --debug        → 网页调试服务 + DEBUG 日志
+  python main.py --desktop      → 桌面窗口（含内置登录浏览器）
+  python main.py --browser      → 本地网页服务（与默认模式相同）
+  GameTierMaker.exe             → 启动本地网页并在默认浏览器打开
 """
 
 import os, sys, logging, traceback, threading, argparse, socket, time
+if __name__ == "__main__" and len(sys.argv) == 3 and sys.argv[1] == "--embedded-browser-helper":
+    from src.core.webview_browser_helper import main as run_embedded_browser_helper
+    run_embedded_browser_helper(sys.argv[2])
+    raise SystemExit(0)
+
 from contextlib import asynccontextmanager
 from http.client import HTTPConnection
 from pathlib import Path
@@ -38,6 +44,7 @@ from src.core.export_service import MAX_EXPORT_BYTES
 from src.core.image_security import MAX_UPLOAD_BYTES
 from src.core.live_logs import RedactingFormatter, install_console_capture, install_session_log_handler
 from src.core.version import APP_VERSION
+from src.core.local_server import SERVICE_NAME, reserve_listener, wait_for_local_server, workspace_identity
 
 # PyInstaller windowed applications may not provide standard streams. Some
 # third-party libraries still print diagnostic messages during authentication.
@@ -61,6 +68,7 @@ else:
     USER_DATA_DIR = EXE_DIR
 
 ROOT_DIR = str(USER_DATA_DIR)
+_SERVICE_WORKSPACE_ID = workspace_identity(ROOT_DIR)
 FRONTEND_DIR = RESOURCE_DIR / "frontend"
 DATA_DIR = USER_DATA_DIR / "data"
 CONFIG_DIR = USER_DATA_DIR / "config"
@@ -98,16 +106,23 @@ os.environ["GAMELIST_ROOT"] = ROOT_DIR
 # ── 命令行参数 ────────────────────────────────────────
 parser = argparse.ArgumentParser(description="Game Tier Maker")
 parser.add_argument("--debug", action="store_true", help="调试模式")
-parser.add_argument("--port",type=int,default=8000,help="8000",)
+launch_mode = parser.add_mutually_exclusive_group()
+launch_mode.add_argument("--desktop", dest="desktop", action="store_true", help="使用可选桌面主窗口")
+launch_mode.add_argument("--browser", dest="desktop", action="store_false", help="使用本地网页（默认），支持左侧浏览器面板")
+parser.set_defaults(desktop=False)
+parser.add_argument("--port", type=int, default=None,
+                    help="固定使用指定端口；默认尝试 8000，不可用时自动选择；0 为自动分配")
 parser.add_argument(
     "--xbox-authenticate",
     metavar="TOKEN_PATH",
     help=argparse.SUPPRESS,
 )
 args = parser.parse_args()
+if args.port is not None and not 0 <= args.port <= 65535:
+    parser.error("--port 必须在 0 到 65535 之间")
 
 IS_DEBUG = args.debug
-RUNTIME_MODE = "desktop" if IS_FROZEN  else "browser"
+RUNTIME_MODE = "desktop" if args.desktop else "browser"
 os.environ["GAMELIST_RUNTIME_MODE"] = RUNTIME_MODE
 
 # ── 日志 ──────────────────────────────────────────────
@@ -131,6 +146,7 @@ install_session_log_handler()
 logger = logging.getLogger(__name__)
 logger.info("日志文件: %s", log_file)
 logger.info("启动模式: %s", "FROZEN-EXE" if IS_FROZEN else ("DEBUG" if IS_DEBUG else "NORMAL"))
+logger.info("运行界面: %s", "桌面窗口" if args.desktop else "本地网页")
 
 # This process capability is injected only into the uncached root document,
 # exchanged immediately for an HttpOnly same-site cookie, and never put in a
@@ -160,10 +176,17 @@ logging.captureWarnings(True)
 # ── FastAPI 应用 ──────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from src.core.browser_auth import browser_auth
+    from src.core.reused_browser import ReusedBrowserHost
+    from src.core.webview_browser import WebViewBrowserHost
+    if browser_auth.host is None:
+        browser_auth.host = ReusedBrowserHost()
+    browser_auth.psn_host = WebViewBrowserHost()
     for sub in ("steam", "igdb", "bangumi", "xbox", "cache"):
         (DATA_DIR / sub).mkdir(parents=True, exist_ok=True)
     logger.info("API 服务已启动 - data: %s, resources: %s", DATA_DIR, RESOURCE_DIR)
     yield
+    browser_auth.shutdown()
     logger.info("API 服务已停止")
 
 
@@ -173,6 +196,7 @@ app = FastAPI(
     docs_url="/docs" if IS_DEBUG else None,
     lifespan=lifespan,
 )
+app.state.local_session_token = _LOCAL_SESSION_TOKEN
 register_error_handlers(app)
 app.add_middleware(
     TrustedHostMiddleware,
@@ -270,7 +294,8 @@ async def local_request_security(request: Request, call_next):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": APP_VERSION, "runtime_mode": RUNTIME_MODE}
+    return {"status": "ok", "version": APP_VERSION, "runtime_mode": RUNTIME_MODE,
+            "service": SERVICE_NAME, "workspace_id": _SERVICE_WORKSPACE_ID}
 
 
 @app.post("/api/session/bootstrap")
@@ -320,6 +345,8 @@ app.include_router(library_router, prefix="/api/library", tags=["library"])
 app.include_router(project_router, prefix="/api/project", tags=["project"])
 app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
 app.include_router(nintendo_router, prefix="/api/settings", tags=["nintendo"])
+from src.api.browser_auth import router as browser_auth_router
+app.include_router(browser_auth_router, prefix="/api/settings", tags=["browser-auth"])
 app.include_router(logs_router, prefix="/api/logs", tags=["logs"])
 app.include_router(exports_router, prefix="/api/exports", tags=["exports"])
 
@@ -383,14 +410,7 @@ else:
 _uvicorn_server = None
 
 
-def _find_free_port(host="127.0.0.1"):
-    """让系统分配一个当前可用的本地端口。"""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind((host, 0))
-        return sock.getsockname()[1]
-
-
-def _run_server(host="127.0.0.1", port=8000):
+def _run_server(host="127.0.0.1", port=8000, listener=None):
     """在独立线程中启动 uvicorn"""
     import uvicorn
     global _uvicorn_server
@@ -398,31 +418,18 @@ def _run_server(host="127.0.0.1", port=8000):
         app,
         host=host,
         port=port,
+        ws_max_size=65536,
         log_level="debug" if IS_DEBUG else "info",
     )
+    from src.core.reused_browser import protect_transport_logs
+    protect_transport_logs()
     _uvicorn_server = uvicorn.Server(config)
-    _uvicorn_server.run()
+    _uvicorn_server.run(sockets=[listener] if listener is not None else None)
 
 
-def _wait_for_server(url, timeout=15.0):
+def _wait_for_server(url, server_thread, timeout=15.0):
     """等待健康检查成功，避免依赖固定时长的 sleep。"""
-    deadline = time.monotonic() + timeout
-    parsed = urlsplit(url)
-    while time.monotonic() < deadline:
-        connection = None
-        try:
-            connection = HTTPConnection(parsed.hostname, parsed.port, timeout=0.5)
-            connection.request("GET", "/api/health")
-            response = connection.getresponse()
-            response.read()
-            if response.status == 200:
-                return True
-        except Exception:
-            time.sleep(0.1)
-        finally:
-            if connection is not None:
-                connection.close()
-    return False
+    return wait_for_local_server(url, server_thread, lambda: _uvicorn_server, timeout)
 
 
 def _stop_server():
@@ -470,7 +477,7 @@ def _run_webview(url="http://127.0.0.1:8000", title="Game Tier Maker"):
                           min_size=(900, 600), confirm_close=False,
                           text_select=True,
                           js_api=desktop_api)
-    webview.start()
+    webview.start(gui="edgechromium")
 
 
 def _run_xbox_auth_helper(tokens_file):
@@ -494,32 +501,44 @@ if __name__ == "__main__":
         raise SystemExit(0)
 
     HOST = "127.0.0.1"
-    PORT = _find_free_port(HOST) if IS_FROZEN else args.port
-    APP_URL = f"http://{HOST}:{PORT}"
-    # HOST = "127.0.0.1"
-    # PORT = _find_free_port(HOST)
-    # APP_URL = f"http://{HOST}:{PORT}"
-
-    # 启动后端线程
-    server_thread = threading.Thread(target=_run_server, args=(HOST, PORT), daemon=True)
-    server_thread.start()
-
-    if not _wait_for_server(APP_URL):
-        logger.critical("后端启动超时: %s", APP_URL)
-        _stop_server()
-        server_thread.join(timeout=5)
-        raise SystemExit(1)
-
+    preferred_port = args.port if args.port is not None else (0 if IS_FROZEN or args.desktop else 8000)
     try:
-
-        if IS_FROZEN :
-            # 打包模式 → 嵌入式 webview 窗口
+        binding = reserve_listener(HOST, preferred_port,
+                                   allow_fallback=args.port is None and preferred_port != 0,
+                                   identity=_SERVICE_WORKSPACE_ID)
+    except OSError as error:
+        logger.critical("无法绑定本地端口 %s:%s（错误 %s）。请指定其他端口，例如 --port 0 自动分配。",
+                        HOST, preferred_port, getattr(error, "winerror", None) or error.errno)
+        _instance_guard.release()
+        raise SystemExit(1)
+    PORT = binding.port
+    APP_URL = f"http://{HOST}:{PORT}"
+    if binding.reused:
+        logger.info("本目录的服务已在运行，请直接使用: %s", APP_URL)
+        _instance_guard.release()
+        raise SystemExit(0)
+    if binding.fallback_error:
+        logger.warning("默认端口 %s 不可用（错误 %s），已切换到: %s", preferred_port,
+                       getattr(binding.fallback_error, "winerror", None) or binding.fallback_error.errno,
+                       APP_URL)
+    server_thread = threading.Thread(target=_run_server, args=(HOST, PORT, binding.listener), daemon=True)
+    try:
+        server_thread.start()
+        if not _wait_for_server(APP_URL, server_thread):
+            logger.critical("后端%s: %s", "启动超时" if server_thread.is_alive() else "启动失败", APP_URL)
+            raise SystemExit(1)
+        if args.desktop:
+            # 可选桌面模式 → 嵌入式 webview 窗口
             logger.info("启动桌面应用窗口: %s", APP_URL)
             _run_webview(APP_URL)
+            logger.info("桌面主窗口已结束，将停止 API 服务")
 
         else:
-            # 开发 / 调试模式 → 系统浏览
+            # 默认保留本地网页；打包版同时打开默认浏览器。
             logger.info("%s", APP_URL)
+            if IS_FROZEN:
+                import webbrowser
+                webbrowser.open(APP_URL)
             server_thread.join()
     except KeyboardInterrupt:
         logger.info("收到退出信号")
@@ -527,4 +546,5 @@ if __name__ == "__main__":
         _stop_server()
         if server_thread.is_alive():
             server_thread.join(timeout=5)
+        binding.listener.close()
         _instance_guard.release()

@@ -5,6 +5,7 @@
   const { t, getErrorMessage } = window.GameTierI18n;
   const { showToast, fetchAPI } = window.GameTierApp;
   function useSteamAccount({
+    authenticate, steamKey, secretTouched, configuredSecrets,
     getCurrentTemplate,
     runBackfill,
     currentId,
@@ -16,11 +17,12 @@
     const steamImportPollTokenRef = useRef(0);
     const handledSteamImportsRef = useRef(new Set());
     const processingSteamImportsRef = useRef(new Map());
+    const expectedSteamOperationRef = useRef('');
     const handleSteamImportComplete = async (result) => {
       const operationId = String(result?.operation_id || '');
-      let expectedOperationId = '';
+      let expectedOperationId = expectedSteamOperationRef.current;
       try {
-        expectedOperationId = sessionStorage.getItem('steam-import-operation') || '';
+        expectedOperationId = expectedOperationId || sessionStorage.getItem('steam-import-operation') || '';
       } catch (error) {
         /* session storage is optional */
       }
@@ -38,6 +40,7 @@
         await loadSteamAccounts();
         runBackfill('steam');
         handledSteamImportsRef.current.add(operationId);
+        if (expectedSteamOperationRef.current === operationId) expectedSteamOperationRef.current = '';
         try {
           if (sessionStorage.getItem('steam-import-operation') === operationId) {
             sessionStorage.removeItem('steam-import-operation');
@@ -131,25 +134,31 @@
       };
     }, []);
     const handleSteamJump = async () => {
+      if (!steamKey.trim() && (secretTouched.steam_key || !configuredSecrets.steam_key)) {
+        showToast(t('steam.keyRequired'), 'error');
+        return;
+      }
       try {
-        const res = await fetchAPI(
-          `/settings/steam/jump?template_id=${encodeURIComponent(currentId)}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              game_name: '',
-            }),
-          }
-        );
-        try {
-          sessionStorage.setItem('steam-import-operation', res.operation_id || '');
-        } catch (error) {
-          /* session storage is optional */
+        setSettingsOperation({ key: 'steam-bind', labelKey: 'steam.binding' });
+        if (secretTouched.steam_key) {
+          if (!steamKey.trim()) throw new Error(t('steam.keyRequired'));
+          await fetchAPI('/settings/steam', {
+            method: 'PUT', body: JSON.stringify({ steam_key: steamKey.trim() }),
+          });
         }
-        window.open(res.url, '_blank');
-        monitorSteamImport(res.operation_id);
-      } catch (e) {
-        showToast(getErrorMessage(e, 'errors.redirectFailed'), 'error');
+        const result = await authenticate('steam', { template_id: currentId });
+        // Keep the existing completion/retry contract for template refresh and backfill.
+        expectedSteamOperationRef.current = result.operation_id;
+        try { sessionStorage.setItem('steam-import-operation', result.operation_id); } catch (_) { /* optional storage */ }
+        await handleSteamImportComplete(result);
+      } catch (error) {
+        if (error.code === 'browser_auth_cancelled') showToast(t('browser.cancelled'), '');
+        else {
+          showToast(getErrorMessage(error, 'errors.bindFailed'), 'error');
+          if (expectedSteamOperationRef.current) monitorSteamImport(expectedSteamOperationRef.current);
+        }
+      } finally {
+        setSettingsOperation(null);
       }
     };
     const loadSteamAccounts = async () => {

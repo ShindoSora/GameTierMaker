@@ -76,58 +76,6 @@
 .top-toolbar .template-rename .rename-save { color: var(--accent); }
 .template-rename .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .template-rename .toolbar-template-name:focus-visible { outline: 1px solid var(--accent); outline-offset: -3px; }
-.theme-switch {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  flex: 0 0 auto;
-  padding: 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-.theme-switch-indicator {
-  position: absolute;
-  z-index: -1;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc((100% - 8px) / 2);
-  border: 1px solid var(--border-strong);
-  border-radius: inherit;
-  background: var(--surface-hover);
-  box-shadow: inset 0 1px 1px var(--border-strong), 0 2px 5px rgba(0, 0, 0, 0.12);
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-  pointer-events: none;
-}
-.theme-switch[data-value="light"] .theme-switch-indicator { transform: translateX(100%); }
-.theme-switch-option {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 72px;
-  min-height: 32px;
-  padding: 5px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: color 160ms ease;
-}
-.theme-switch-option svg { flex-shrink: 0; }
-.theme-switch-option:hover, .theme-switch-option[aria-pressed="true"] { color: var(--text-primary); }
-.theme-switch-option[aria-pressed="true"] { font-weight: 600; }
-.theme-switch-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-@media (prefers-reduced-motion: reduce) {
-  .theme-switch-indicator, .theme-switch-option { transition: none; }
-}
 @media (max-width:1100px) {
   .top-toolbar { gap:6px; }
   .toolbar-caption { display:none; }
@@ -181,6 +129,17 @@
 .steam-progress-text { font-size: 28px; font-weight: 700; color: var(--text-primary); }
 
 /* Steam accounts list */
+.nintendo-account-row.steam-account-row { flex-wrap: wrap; }
+.nintendo-account-row.steam-account-row > .actions {
+  flex-basis: 100%; flex-wrap: wrap; align-items: center;
+}
+.nintendo-sync-controls { display: inline-flex; align-items: center; gap: 8px; }
+.nintendo-demo-option {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+}
+.nintendo-demo-option input { margin: 0; accent-color: var(--accent); }
+.nintendo-demo-option:has(input:disabled) { opacity: .6; cursor: default; }
 .steam-account-row {
   display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
   container-type: inline-size;

@@ -1,10 +1,11 @@
 (() => {
   'use strict';
 
-  const { useState } = React;
+  const { useState, useRef } = React;
   const { t, getErrorMessage } = window.GameTierI18n;
   const { fetchAPI, showToast } = window.GameTierApp;
   function useNintendoAccount({
+    authenticate,
     setSettingsOperation,
     currentId,
     refreshSelectedTemplate,
@@ -12,12 +13,27 @@
     confirmAction,
   }) {
     const [nintendoAccounts, setNintendoAccounts] = useState({});
-    const [nintendoAuthOperation, setNintendoAuthOperation] = useState(null);
-    const [nintendoAuthorizeUrl, setNintendoAuthorizeUrl] = useState('');
-    const [nintendoCallback, setNintendoCallback] = useState('');
-    const [nintendoPreview, setNintendoPreview] = useState(null);
-    const [nintendoSelected, setNintendoSelected] = useState(new Set());
-    const [nintendoImportRequestId, setNintendoImportRequestId] = useState('');
+    const [nintendoExcludeDemos, setNintendoExcludeDemos] = useState(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('nintendo-exclude-demos') || '{}');
+        return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+      } catch (error) {
+        return {};
+      }
+    });
+    const syncingRef = useRef(false);
+    const syncRequestRef = useRef(null);
+    const handleNintendoExcludeDemos = (accountId, checked) => {
+      setNintendoExcludeDemos(previous => {
+        const next = { ...previous, [accountId]: checked };
+        try {
+          localStorage.setItem('nintendo-exclude-demos', JSON.stringify(next));
+        } catch (error) {
+          /* The current session can still use this preference. */
+        }
+        return next;
+      });
+    };
     const loadNintendoAccounts = async () => {
       try {
         const res = await fetchAPI('/settings/nintendo/accounts');
@@ -28,55 +44,28 @@
     };
     const handleNintendoStart = async () => {
       try {
-        setSettingsOperation({
-          key: 'nintendo-auth',
-          labelKey: 'nintendo.authorizing',
-        });
-        const res = await fetchAPI('/settings/nintendo/auth/start', {
-          method: 'POST',
-          body: JSON.stringify({
-            template_id: currentId,
-          }),
-        });
-        setNintendoAuthOperation(res.operation_id || '');
-        setNintendoAuthorizeUrl(res.authorize_url || '');
-        const popup = window.open(res.authorize_url, '_blank');
-        if (!popup) showToast(t('nintendo.popupBlocked'), 'error');
-      } catch (e) {
-        showToast(getErrorMessage(e, 'errors.nintendoAuthFailed'), 'error');
-      } finally {
-        setSettingsOperation(null);
-      }
-    };
-    const handleNintendoComplete = async () => {
-      if (!nintendoAuthOperation || !nintendoCallback.trim()) {
-        showToast(t('nintendo.callbackRequired'), 'error');
-        return;
-      }
-      try {
-        setSettingsOperation({
-          key: 'nintendo-complete',
-          labelKey: 'nintendo.verifying',
-        });
-        await fetchAPI('/settings/nintendo/auth/complete', {
-          method: 'POST',
-          body: JSON.stringify({
-            operation_id: nintendoAuthOperation,
-            callback_url: nintendoCallback.trim(),
-          }),
-        });
-        setNintendoCallback('');
-        setNintendoAuthOperation(null);
-        setNintendoAuthorizeUrl('');
+        setSettingsOperation({ key: 'nintendo-auth', labelKey: 'nintendo.authorizing' });
+        await authenticate('nintendo', { template_id: currentId });
         await loadNintendoAccounts();
         showToast(t('nintendo.bound'), 'success');
-      } catch (e) {
-        showToast(getErrorMessage(e, 'errors.nintendoAuthFailed'), 'error');
+      } catch (error) {
+        if (error.code === 'browser_auth_cancelled') showToast(t('browser.cancelled'), '');
+        else showToast(getErrorMessage(error, 'errors.nintendoAuthFailed'), 'error');
       } finally {
         setSettingsOperation(null);
       }
     };
     const handleNintendoSync = async (accountId) => {
+      if (syncingRef.current) return;
+      syncingRef.current = true;
+      const excludeDemos = nintendoExcludeDemos[accountId] !== false;
+      const scope = JSON.stringify([accountId, currentId, excludeDemos]);
+      if (syncRequestRef.current?.scope !== scope) {
+        syncRequestRef.current = {
+          scope,
+          requestId: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+        };
+      }
       try {
         setSettingsOperation({
           key: `nintendo-sync-${accountId}`,
@@ -86,64 +75,33 @@
           `/settings/nintendo/accounts/${encodeURIComponent(accountId)}/sync?template_id=${encodeURIComponent(currentId)}`,
           {
             method: 'POST',
+            body: JSON.stringify({
+              exclude_demos: excludeDemos,
+              request_id: syncRequestRef.current.requestId,
+            }),
           }
         );
-        setNintendoPreview(res);
-        setNintendoSelected(new Set((res.titles || []).map((title) => title.record_key)));
-        setNintendoImportRequestId('');
+        if (res.status !== 'completed') {
+          throw Object.assign(new Error(t('errors.nintendo_sync_update_required')), {
+            code: 'nintendo_sync_update_required',
+          });
+        }
+        await loadNintendoAccounts();
+        await refreshSelectedTemplate();
+        await runBackfill('nintendo');
+        syncRequestRef.current = null;
         showToast(
-          t('nintendo.previewReady', {
-            count: res.received || 0,
+          t('nintendo.syncCompleted', {
+            count: res.registered || 0,
+            pending: res.cover_pending || 0,
+            excluded: res.excluded_demos || 0,
           }),
           'success'
         );
       } catch (e) {
         showToast(getErrorMessage(e, 'errors.nintendoSyncFailed'), 'error');
       } finally {
-        setSettingsOperation(null);
-      }
-    };
-    const handleNintendoImport = async () => {
-      if (!nintendoPreview || !nintendoSelected.size) {
-        showToast(t('nintendo.selectRequired'), 'error');
-        return;
-      }
-      const requestId =
-        nintendoImportRequestId ||
-        window.crypto?.randomUUID?.() ||
-        `${Date.now()}-${Math.random()}`;
-      if (!nintendoImportRequestId) setNintendoImportRequestId(requestId);
-      try {
-        setSettingsOperation({
-          key: 'nintendo-import',
-          labelKey: 'nintendo.importing',
-        });
-        const res = await fetchAPI(
-          `/settings/nintendo/accounts/${encodeURIComponent(nintendoPreview.account_id)}/import`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              preview_id: nintendoPreview.preview_id,
-              record_keys: Array.from(nintendoSelected),
-              request_id: requestId,
-            }),
-          }
-        );
-        setNintendoPreview(null);
-        setNintendoSelected(new Set());
-        setNintendoImportRequestId('');
-        await refreshSelectedTemplate();
-        showToast(
-          t('nintendo.imported', {
-            count: res.registered || 0,
-            pending: res.cover_pending || 0,
-          }),
-          'success'
-        );
-        runBackfill('nintendo');
-      } catch (e) {
-        showToast(getErrorMessage(e, 'errors.nintendoImportFailed'), 'error');
-      } finally {
+        syncingRef.current = false;
         setSettingsOperation(null);
       }
     };
@@ -181,20 +139,11 @@
     };
     return {
       nintendoAccounts,
-      nintendoAuthOperation,
-      nintendoAuthorizeUrl,
-      nintendoCallback,
-      setNintendoCallback,
-      nintendoPreview,
-      setNintendoPreview,
-      nintendoSelected,
-      setNintendoSelected,
-      setNintendoImportRequestId,
+      nintendoExcludeDemos,
+      handleNintendoExcludeDemos,
       loadNintendoAccounts,
       handleNintendoStart,
-      handleNintendoComplete,
       handleNintendoSync,
-      handleNintendoImport,
       handleNintendoUnbind,
       handleNintendoDeleteImages,
     };

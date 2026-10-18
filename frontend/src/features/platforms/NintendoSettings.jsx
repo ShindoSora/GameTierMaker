@@ -7,22 +7,13 @@
     const { settingsActiveSection } = preferencesModel;
     const {
       handleNintendoStart,
-      nintendoAuthOperation,
-      nintendoAuthorizeUrl,
-      nintendoCallback,
-      setNintendoCallback,
-      handleNintendoComplete,
       loadNintendoAccounts,
       nintendoAccounts,
       handleNintendoSync,
       handleNintendoDeleteImages,
       handleNintendoUnbind,
-      nintendoPreview,
-      nintendoSelected,
-      setNintendoSelected,
-      handleNintendoImport,
-      setNintendoPreview,
-      setNintendoImportRequestId,
+      nintendoExcludeDemos,
+      handleNintendoExcludeDemos,
     } = nintendoModel;
     const { settingsOperation } = settingsModel;
     return (
@@ -47,71 +38,6 @@
             {t('nintendo.openLogin')}
           </button>
 
-          {nintendoAuthOperation && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: 12,
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--surface)',
-              }}
-            >
-              <p
-                style={{
-                  margin: '0 0 8px',
-                  fontSize: 11,
-                  color: 'var(--text-secondary)',
-                  lineHeight: 1.6,
-                }}
-              >
-                {t('nintendo.callbackHelp')}
-              </p>
-              <input
-                className="input"
-                style={{
-                  width: '100%',
-                  marginBottom: 8,
-                  fontSize: 11,
-                }}
-                value={nintendoAuthorizeUrl}
-                readOnly
-                onFocus={(e) => e.target.select()}
-              />
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 5,
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                {t('nintendo.callbackLabel')}
-              </label>
-              <textarea
-                className="input"
-                rows="3"
-                style={{
-                  width: '100%',
-                  resize: 'vertical',
-                }}
-                value={nintendoCallback}
-                onChange={(e) => setNintendoCallback(e.target.value)}
-                placeholder={t('nintendo.callbackPlaceholder')}
-              />
-              <button
-                className="btn btn-sm btn-primary"
-                style={{
-                  marginTop: 8,
-                }}
-                onClick={handleNintendoComplete}
-                disabled={!!settingsOperation}
-              >
-                {t('nintendo.verifyCallback')}
-              </button>
-            </div>
-          )}
 
           <div
             style={{
@@ -154,7 +80,7 @@
             </p>
           ) : (
             Object.entries(nintendoAccounts).map(([accountId, info]) => (
-              <div key={accountId} className="steam-account-row">
+              <div key={accountId} className="steam-account-row nintendo-account-row">
                 <div
                   className="avatar-fallback"
                   style={{
@@ -194,25 +120,38 @@
                   </small>
                 </div>
                 <div className="actions">
-                  <button
-                    className="btn btn-xs btn-primary"
-                    onClick={() => handleNintendoSync(accountId)}
-                    disabled={!!settingsOperation}
-                  >
-                    {t('actions.sync')}
-                  </button>
+                  <div className="nintendo-sync-controls">
+                    <button
+                      className="btn btn-xs btn-primary"
+                      onClick={() => handleNintendoSync(accountId)}
+                      disabled={!!settingsOperation}
+                    >
+                      {t('actions.sync')}
+                    </button>
+                    <label className="nintendo-demo-option" title={t('nintendo.excludeDemosHelp')}>
+                      <input
+                        type="checkbox"
+                        checked={nintendoExcludeDemos[accountId] !== false}
+                        onChange={event => handleNintendoExcludeDemos(accountId, event.target.checked)}
+                        disabled={!!settingsOperation}
+                      />
+                      {t('nintendo.excludeDemos')}
+                    </label>
+                  </div>
                   <button
                     className="btn btn-xs"
                     style={{
                       color: 'var(--danger)',
                     }}
                     onClick={() => handleNintendoDeleteImages(accountId)}
+                    disabled={!!settingsOperation}
                   >
                     {t('actions.deleteImages')}
                   </button>
                   <button
                     className="btn btn-xs btn-danger"
                     onClick={() => handleNintendoUnbind(accountId)}
+                    disabled={!!settingsOperation}
                   >
                     {t('actions.unbind')}
                   </button>
@@ -221,134 +160,6 @@
             ))
           )}
 
-          {nintendoPreview && (
-            <div
-              style={{
-                marginTop: 16,
-                borderTop: '1px solid var(--divider)',
-                paddingTop: 14,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 8,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  {t('nintendo.previewTitle', {
-                    count: nintendoPreview.received || 0,
-                  })}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {t('nintendo.selectedCount', {
-                    count: nintendoSelected.size,
-                  })}
-                </span>
-              </div>
-              <div
-                style={{
-                  maxHeight: 280,
-                  overflowY: 'auto',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-md)',
-                }}
-              >
-                {(nintendoPreview.titles || []).map((title) => (
-                  <label
-                    key={title.record_key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '7px 9px',
-                      borderBottom: '1px solid var(--divider)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      style={{
-                        accentColor: 'var(--accent)',
-                      }}
-                      checked={nintendoSelected.has(title.record_key)}
-                      onChange={() =>
-                        setNintendoSelected((previous) => {
-                          const next = new Set(previous);
-                          next.has(title.record_key)
-                            ? next.delete(title.record_key)
-                            : next.add(title.record_key);
-                          return next;
-                        })
-                      }
-                    />
-                    <span
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {title.title_name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: 'var(--text-secondary)',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {title.total_played_minutes == null
-                        ? t('nintendo.unknownTime')
-                        : t('nintendo.minutes', {
-                            count: title.total_played_minutes,
-                          })}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  marginTop: 10,
-                }}
-              >
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={handleNintendoImport}
-                  disabled={!!settingsOperation || !nintendoSelected.size}
-                >
-                  {t('nintendo.importSelected')}
-                </button>
-                <button
-                  className="btn btn-sm"
-                  onClick={() => {
-                    setNintendoPreview(null);
-                    setNintendoSelected(new Set());
-                    setNintendoImportRequestId('');
-                  }}
-                  disabled={!!settingsOperation}
-                >
-                  {t('actions.cancel')}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )
     );

@@ -115,6 +115,7 @@
           <button
             className="btn btn-sm"
             onClick={handleSteamJump}
+            disabled={!!settingsOperation}
             style={{
               background: '#1a3a5c',
               border: '1px solid #2a5a8c',

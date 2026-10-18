@@ -5,10 +5,8 @@
   const { t, getErrorMessage } = window.GameTierI18n;
   const { fetchAPI, showToast } = window.GameTierApp;
   function usePsnAccount({
+    authenticate,
     psnOnlineId,
-    psnNpsso,
-    secretTouched,
-    configuredSecrets,
     setSettingsOperation,
     psnCategories,
     psnMinPlayDuration,
@@ -29,11 +27,8 @@
       }
     };
     const handlePsnBind = async () => {
-      if (
-        !psnOnlineId.trim() ||
-        (!psnNpsso.trim() && (secretTouched.psn_npsso || !configuredSecrets.psn_npsso))
-      ) {
-        showToast(t('psn.credentialsRequired'), 'error');
+      if (!psnOnlineId.trim()) {
+        showToast(t('psn.onlineIdRequired'), 'error');
         return;
       }
       try {
@@ -41,7 +36,7 @@
           key: 'psn-bind',
           labelKey: 'psn.binding',
         });
-        // 先保存筛选配置和 NPSSO
+        // Save filters before opening the platform sign-in page.
         await fetchAPI('/settings/psn/filters', {
           method: 'PUT',
           body: JSON.stringify({
@@ -49,22 +44,9 @@
             min_play_duration_hours: psnMinPlayDuration,
           }),
         });
-        await fetchAPI('/settings/psn', {
-          method: 'PUT',
-          body: JSON.stringify({
-            psn_npsso: secretTouched.psn_npsso ? psnNpsso.trim() : null,
-          }),
+        const res = await authenticate('psn', {
+          account: psnOnlineId.trim(), template_id: currentId,
         });
-        // 绑定
-        const res = await fetchAPI(
-          `/settings/psn/bind?template_id=${encodeURIComponent(currentId)}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              psn_online_id: psnOnlineId.trim(),
-            }),
-          }
-        );
         setPsnOnlineId('');
         showToast(
           t('psn.bindSucceeded', {
@@ -73,10 +55,11 @@
           'success'
         );
         await loadPsnAccounts();
-        await loadCurrentTemplate(currentId);
+        await refreshSelectedTemplate();
         runBackfill('psn');
       } catch (e) {
-        showToast(getErrorMessage(e, 'errors.bindFailed'), 'error');
+        if (e.code === 'browser_auth_cancelled') showToast(t('browser.cancelled'), '');
+        else showToast(getErrorMessage(e, 'errors.bindFailed'), 'error');
       } finally {
         setSettingsOperation(null);
       }

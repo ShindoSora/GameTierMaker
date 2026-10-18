@@ -37,9 +37,7 @@ class XboxClient:
 
     async def _get_client(self):
         try:
-            # Token discovery may launch the xbox authentication helper and
-            # wait for a child process. Keep that blocking work off Uvicorn's
-            # event-loop thread.
+            # File access and DPAPI decryption stay off Uvicorn's event loop.
             json_str = await asyncio.to_thread(
                 self.xbox_token.get_xbox_live_token
             )
@@ -78,6 +76,8 @@ class XboxClient:
 
         try:
             await auth_mgr.refresh_tokens()
+            from src.core.platform_credentials import save_credentials
+            save_credentials("xbox", oauth=auth_mgr.oauth.model_dump_json())
         except AuthenticationException as exc:
             await self._close_session(session)
             raise CredentialExpiredError(

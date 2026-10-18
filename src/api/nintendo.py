@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 import re
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,12 +22,13 @@ from src.core.errors import (
     InvalidInputError,
     RemoteResponseError,
 )
-from src.core.nintendo.models import NintendoTitle
+from src.core.nintendo.models import NintendoTitle, is_demo_title
 from src.core.nintendo.nintendo_client import NintendoClient
 from src.core.nintendo.store import NintendoStore
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _LOCK = threading.RLock()
 _ACCOUNT_LOCKS: dict[str, threading.Lock] = {}
@@ -125,6 +127,11 @@ class NintendoImportRequest(BaseModel):
     preview_id: str = Field(min_length=1, max_length=128)
     record_keys: list[str] = Field(min_length=1, max_length=1000)
     request_id: str = Field(min_length=1, max_length=128)
+
+
+class NintendoSyncRequest(BaseModel):
+    exclude_demos: bool = False
+    request_id: str = Field(default_factory=lambda: uuid.uuid4().hex, min_length=1, max_length=128)
 
 
 @router.post("/nintendo/auth/start")
@@ -228,7 +235,12 @@ def delete_nintendo_account_images(account_id: str):
 
 
 @router.post("/nintendo/accounts/{account_id}/sync")
-def sync_nintendo_account(account_id: str, template_id: str | None = None):
+def sync_nintendo_account(
+    account_id: str,
+    template_id: str | None = None,
+    req: NintendoSyncRequest | None = None,
+):
+    req = req or NintendoSyncRequest()
     account_id = _account_id(account_id)
     account = NintendoStore.get_account(account_id)
     if not account:
@@ -239,6 +251,17 @@ def sync_nintendo_account(account_id: str, template_id: str | None = None):
         account = NintendoStore.get_account(account_id)
         if not account:
             raise AccountNotFoundError("未找到 Nintendo 账号", code="nintendo_account_not_found")
+        existing = NintendoStore.load_records(account_id) or {}
+        sync_options = {"template_id": target_template_id, "exclude_demos": req.exclude_demos}
+        if existing.get("last_import_request_id") == req.request_id:
+            if existing.get("sync_options") != sync_options:
+                raise InvalidInputError("Nintendo 同步选项已改变，请重新同步", code="nintendo_preview_invalid")
+            prior = existing.get("last_import_result")
+            if isinstance(prior, dict):
+                NintendoStore.touch_sync(account_id)
+                logger.info("Nintendo 同步复用已完成结果: 排除体验版=%s", req.exclude_demos)
+                return prior
+        logger.info("Nintendo 同步开始: 排除体验版=%s", req.exclude_demos)
         try:
             token = NintendoStore.get_session_token(account_id)
             client = NintendoClient(token, locale=account.get("language") or "en-US")
@@ -249,7 +272,6 @@ def sync_nintendo_account(account_id: str, template_id: str | None = None):
         title_dicts = [_title_dict(title) for title in titles]
         snapshot_id = uuid.uuid4().hex
         preview_id = uuid.uuid4().hex
-        existing = NintendoStore.load_records(account_id) or {}
         preview = {
             "preview_id": preview_id,
             "account_id": account_id,
@@ -257,34 +279,33 @@ def sync_nintendo_account(account_id: str, template_id: str | None = None):
             "template_id": target_template_id,
             "snapshot_id": snapshot_id,
             "titles": title_dicts,
+            "sync_options": sync_options,
+            "excluded_demos": sum(
+                1 for title in title_dicts
+                if req.exclude_demos and is_demo_title(title["title_name"])
+            ),
+            "fetched_at": _utc_now(),
             "created_at": time.time(),
         }
         with _LOCK:
             _prune_locked()
             _PREVIEWS[preview_id] = preview
-        NintendoStore.save_records(
-            account_id,
-            {
-                "schema_version": 1,
-                "account_id": account_id,
-                "snapshot_id": snapshot_id,
-                "status": "preview",
-                "fetched_at": _utc_now(),
-                "titles": title_dicts,
-                "imported_record_keys": existing.get("imported_record_keys", []),
-                "imported_titles": existing.get("imported_titles", {}),
-            },
-        )
+        try:
+            result = _import_nintendo_records_locked(
+                account_id,
+                account,
+                preview_id=preview_id,
+                record_keys=[
+                    title["record_key"] for title in title_dicts
+                    if not req.exclude_demos or not is_demo_title(title["title_name"])
+                ],
+                request_id=req.request_id,
+            )
+        finally:
+            with _LOCK:
+                _PREVIEWS.pop(preview_id, None)
         NintendoStore.touch_sync(account_id)
-        return {
-            "ok": True,
-            "preview_id": preview_id,
-            "expires_at": int(time.time() + _PREVIEW_TTL),
-            "account_id": account_id,
-            "template_id": target_template_id,
-            "received": len(title_dicts),
-            "titles": title_dicts,
-        }
+        return result
 
 
 @router.get("/nintendo/accounts/{account_id}/records")
@@ -311,47 +332,67 @@ def import_nintendo_records(account_id: str, req: NintendoImportRequest):
         account = NintendoStore.get_account(account_id)
         if not account:
             raise AccountNotFoundError("未找到 Nintendo 账号", code="nintendo_account_not_found")
-        previous = NintendoStore.load_records(account_id) or {}
-        if previous.get("last_import_request_id") == req.request_id:
-            prior = previous.get("last_import_result")
-            if isinstance(prior, dict):
-                return prior
-        with _LOCK:
-            _prune_locked()
-            preview = _PREVIEWS.get(req.preview_id)
-        if not preview or preview.get("account_id") != account_id:
-            raise InvalidInputError("Nintendo 预览已失效，请重新同步", code="nintendo_preview_expired")
-        if int(preview.get("account_version", -1)) != int(account.get("credential_version", 0) or 0):
-            raise InvalidInputError("Nintendo 账号已重新授权，请重新同步", code="nintendo_preview_stale")
-        manager = get_manager()
-        target_template = manager.get_template(preview.get("template_id"))
-        if target_template is None:
-            raise InvalidInputError("目标模板不存在或已被删除", code="template_not_found")
+        return _import_nintendo_records_locked(
+            account_id, account, preview_id=req.preview_id,
+            record_keys=req.record_keys, request_id=req.request_id,
+        )
 
-        all_titles = {
-            str(title.get("record_key")): title
-            for title in preview.get("titles", [])
-            if isinstance(title, dict) and title.get("record_key")
-        }
-        selected_keys = list(dict.fromkeys(str(key) for key in req.record_keys))
-        if any(key not in all_titles for key in selected_keys):
-            raise InvalidInputError("Nintendo 导入项不属于当前预览", code="nintendo_preview_invalid")
 
-        imported_before = {
-            str(key) for key in previous.get("imported_record_keys", []) if key
-        }
-        imported_titles = {
-            str(key): dict(value)
-            for key, value in (previous.get("imported_titles") or {}).items()
-            if isinstance(value, dict)
-        }
-        for key in selected_keys:
-            imported_titles[key] = all_titles[key]
-        imported_keys = imported_before | set(selected_keys)
-        union_titles = [imported_titles[key] for key in imported_keys if key in imported_titles]
-        games = _manager_games(union_titles)
-        group_id = _group_id(account_id)
-        before_names = _existing_source_names(manager, group_id)
+def _import_nintendo_records_locked(
+    account_id: str, account: dict[str, Any], *,
+    preview_id: str, record_keys: list[str], request_id: str,
+):
+    """Caller holds the account lock through fetch, registration and record save."""
+    previous = NintendoStore.load_records(account_id) or {}
+    if previous.get("last_import_request_id") == request_id:
+        prior = previous.get("last_import_result")
+        if isinstance(prior, dict):
+            return prior
+    with _LOCK:
+        _prune_locked()
+        preview = _PREVIEWS.get(preview_id)
+    if not preview or preview.get("account_id") != account_id:
+        raise InvalidInputError("Nintendo 预览已失效，请重新同步", code="nintendo_preview_expired")
+    if int(preview.get("account_version", -1)) != int(account.get("credential_version", 0) or 0):
+        raise InvalidInputError("Nintendo 账号已重新授权，请重新同步", code="nintendo_preview_stale")
+    manager = get_manager()
+    target_template = manager.get_template(preview.get("template_id"))
+    if target_template is None:
+        raise InvalidInputError("目标模板不存在或已被删除", code="template_not_found")
+
+    all_titles = {
+        str(title.get("record_key")): title
+        for title in preview.get("titles", [])
+        if isinstance(title, dict) and title.get("record_key")
+    }
+    selected_keys = list(dict.fromkeys(str(key) for key in record_keys))
+    if any(key not in all_titles for key in selected_keys):
+        raise InvalidInputError("Nintendo 导入项不属于当前预览", code="nintendo_preview_invalid")
+
+    imported_before = {
+        str(key) for key in previous.get("imported_record_keys", []) if key
+    }
+    imported_titles = {
+        str(key): dict(value)
+        for key, value in (previous.get("imported_titles") or {}).items()
+        if isinstance(value, dict)
+    }
+    for key in selected_keys:
+        imported_titles[key] = all_titles[key]
+    imported_keys = imported_before | set(selected_keys)
+    union_titles = [imported_titles[key] for key in imported_keys if key in imported_titles]
+    exclude_demos = bool((preview.get("sync_options") or {}).get("exclude_demos", False))
+    sync_titles = [
+        title for title in union_titles
+        if not exclude_demos or not is_demo_title(str(title.get("title_name") or ""))
+    ]
+    excluded_history_demos = len(union_titles) - len(sync_titles)
+    games = _manager_games(sync_titles)
+    group_id = _group_id(account_id)
+    before_names = _existing_source_names(manager, group_id)
+    # Rebuild the account group without demos, including when every title is
+    # excluded. The manager preserves images already placed in tiers/unassigned.
+    if games or (exclude_demos and target_template.hidden_preset.find_group_by_id(group_id)):
         manager.register_remote_images(
             games,
             steam_id="",
@@ -360,44 +401,54 @@ def import_nintendo_records(account_id: str, req: NintendoImportRequest):
             template_id=str(preview["template_id"]),
             group_name=_group_name(account, account_id),
         )
-        after_names = _existing_source_names(manager, group_id)
-        selected_with_cover = sum(1 for key in selected_keys if _has_cover(all_titles[key]))
-        selected_names = {
-            "nintendo_" + key + ".jpg"
-            for key in selected_keys
-            if _has_cover(all_titles[key])
-        }
-        created = len((after_names - before_names) & selected_names)
-        registered = selected_with_cover
-        reused = max(0, registered - created)
-        result = {
-            "ok": True,
-            "status": "completed",
-            "account_id": account_id,
-            "template_id": preview["template_id"],
-            "received": len(all_titles),
-            "selected": len(selected_keys),
-            "registered": registered,
-            "created": created,
-            "reused": reused,
-            "cover_pending": len(selected_keys) - selected_with_cover,
-            "skipped_invalid": 0,
-        }
-        confirmed = {
-            "schema_version": 1,
-            "account_id": account_id,
-            "snapshot_id": preview["snapshot_id"],
-            "status": "confirmed",
-            "fetched_at": previous.get("fetched_at") or _utc_now(),
-            "confirmed_at": _utc_now(),
-            "titles": list(all_titles.values()),
-            "selected_record_keys": selected_keys,
-            "imported_record_keys": sorted(imported_keys),
-            "imported_titles": imported_titles,
-            "last_import_request_id": req.request_id,
-            "last_import_result": result,
-        }
-        NintendoStore.save_records(account_id, confirmed)
-        with _LOCK:
-            _PREVIEWS.pop(req.preview_id, None)
-        return result
+    after_names = _existing_source_names(manager, group_id)
+    selected_with_cover = sum(1 for key in selected_keys if _has_cover(all_titles[key]))
+    selected_names = {
+        "nintendo_" + key + ".jpg"
+        for key in selected_keys
+        if _has_cover(all_titles[key])
+    }
+    created = len((after_names - before_names) & selected_names)
+    registered = selected_with_cover
+    reused = max(0, registered - created)
+    result = {
+        "ok": True,
+        "status": "completed",
+        "account_id": account_id,
+        "template_id": preview["template_id"],
+        "received": len(all_titles),
+        "selected": len(selected_keys),
+        "registered": registered,
+        "created": created,
+        "reused": reused,
+        "cover_pending": len(selected_keys) - selected_with_cover,
+        "skipped_invalid": 0,
+        "excluded_demos": int(preview.get("excluded_demos", 0)),
+        "excluded_history_demos": excluded_history_demos,
+        "sync_registered": len(games),
+    }
+    confirmed = {
+        "schema_version": 1,
+        "account_id": account_id,
+        "snapshot_id": preview["snapshot_id"],
+        "status": "confirmed",
+        "fetched_at": preview.get("fetched_at") or previous.get("fetched_at") or _utc_now(),
+        "confirmed_at": _utc_now(),
+        "titles": list(all_titles.values()),
+        "selected_record_keys": selected_keys,
+        "imported_record_keys": sorted(imported_keys),
+        "imported_titles": imported_titles,
+        "last_import_request_id": request_id,
+        "last_import_result": result,
+        "sync_options": preview.get("sync_options"),
+    }
+    NintendoStore.save_records(account_id, confirmed)
+    logger.info(
+        "Nintendo 同步完成: 排除体验版=%s, 获取=%d, 本次选择=%d, "
+        "最终注册=%d, 排除本次体验版=%d, 排除历史体验版=%d, 新增=%d, 复用=%d",
+        exclude_demos, len(all_titles), len(selected_keys), len(games),
+        result["excluded_demos"], excluded_history_demos, created, reused,
+    )
+    with _LOCK:
+        _PREVIEWS.pop(preview_id, None)
+    return result

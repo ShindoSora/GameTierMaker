@@ -15,6 +15,7 @@
     StorageSettings,
     AboutSettings,
     SettingsSectionHeading,
+    BrowserPreviewLauncher,
   } = window.GameTierApp;
   function GlassTransparencySlider({ value, enabled, onChange }) {
     const position = Math.max(0, Math.min(80, Number(value) || 0)) / 80;
@@ -96,6 +97,7 @@
     );
   }
   function SettingsPanel({
+    browserModel,
     island,
     logVisible,
     logAnchorRef,
@@ -335,6 +337,7 @@
               </div>
               {/* Right content */}
               <div className="settings-content">
+                <BrowserPreviewLauncher model={browserModel} section={settingsActiveSection} />
                 {settingsActiveSection === 'appearance' && (
                   <div className="appearance-settings">
                     <SettingsSectionHeading title={t('settings.tabs.appearance')} />

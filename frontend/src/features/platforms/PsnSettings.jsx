@@ -2,15 +2,10 @@
   'use strict';
 
   const { t } = window.GameTierI18n;
-  const { SettingsSectionHeading, PasswordField, AccountAvatar } = window.GameTierApp;
+  const { SettingsSectionHeading, AccountAvatar } = window.GameTierApp;
   function PsnSettings({ preferencesModel, settingsModel, psnModel }) {
     const { settingsActiveSection } = preferencesModel;
     const {
-      psnNpsso,
-      updateSettingSecret,
-      setPsnNpsso,
-      revealSettingSecret,
-      handleSavePsnSettingsFromPlatform,
       settingsOperation,
       psnCategories,
       togglePsnCategory,
@@ -31,76 +26,7 @@
       settingsActiveSection === 'psn_accounts' && (
         <div>
           <SettingsSectionHeading title="PSN" />
-          <div
-            style={{
-              marginBottom: 16,
-            }}
-          >
-            <label
-              style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 600,
-                marginBottom: 4,
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {t('settings.psnNpssoLabel')}
-            </label>
-            <PasswordField
-              value={psnNpsso}
-              onChange={(e) => updateSettingSecret('psn_npsso', setPsnNpsso, e.target.value)}
-              onReveal={() => revealSettingSecret('psn_npsso', setPsnNpsso)}
-              placeholder={t('settings.npssoPlaceholder')}
-            />
-            <p
-              style={{
-                marginTop: 6,
-                fontSize: 11,
-                color: 'var(--text-secondary)',
-                lineHeight: 1.6,
-              }}
-            >
-              {t('settings.npssoHelpStart')}{' '}
-              <a
-                href="https://store.playstation.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: 'var(--accent)',
-                }}
-              >
-                https://store.playstation.com
-              </a>{' '}
-              {t('settings.npssoHelpMiddle')}{' '}
-              <a
-                href="https://ca.account.sony.com/api/v1/ssocookie"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: 'var(--accent)',
-                }}
-              >
-                https://ca.account.sony.com/api/v1/ssocookie
-              </a>{' '}
-              {t('settings.npssoHelpEnd')}
-            </p>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={handleSavePsnSettingsFromPlatform}
-              disabled={!!settingsOperation}
-            >
-              {t('actions.save')}
-            </button>
-          </div>
-          <div
-            style={{
-              height: 1,
-              background: 'var(--divider)',
-              marginBottom: 20,
-            }}
-          ></div>
-
+          <p className="platform-login-help">{t('psn.browserHelp')}</p>
           {/* 平台筛选 */}
           <div
             style={{

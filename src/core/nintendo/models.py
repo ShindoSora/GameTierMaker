@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 import hashlib
+import re
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
 from src.core.errors import RemoteResponseError
+
+
+_DEMO_NAME = re.compile(
+    r"体験版|體驗版|体验版|試玩版|试玩版|試用版|试用版|お試し版"
+    r"|(?<![a-z0-9])demo(?![a-z0-9])"
+    r"|(?<![a-z0-9])trial[\s_-]+(?:version|edition)(?![a-z0-9])",
+    re.IGNORECASE,
+)
+
+
+def is_demo_title(title_name: str) -> bool:
+    """Guess from explicit demo name markers, not from playtime or title IDs."""
+    return bool(_DEMO_NAME.search(unicodedata.normalize("NFKC", title_name)))
 
 
 @dataclass(frozen=True)

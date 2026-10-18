@@ -5,6 +5,7 @@
   const { t, getErrorMessage } = window.GameTierI18n;
   const { fetchAPI, showToast } = window.GameTierApp;
   function useXboxAccount({
+    authenticate,
     setSettingsOperation,
     currentId,
     loadCurrentTemplate,
@@ -32,15 +33,9 @@
           key: 'xbox-bind',
           labelKey: 'xbox.binding',
         });
-        const res = await fetchAPI(
-          `/settings/xbox/bind?template_id=${encodeURIComponent(currentId)}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              gamertag: xboxGamertag.trim(),
-            }),
-          }
-        );
+        const res = await authenticate('xbox', {
+          account: xboxGamertag.trim(), template_id: currentId,
+        });
         setXboxGamertag('');
         showToast(
           t('xbox.bindSucceeded', {
@@ -48,10 +43,12 @@
           }),
           'success'
         );
-        await loadCurrentTemplate(currentId);
+        await refreshSelectedTemplate();
+        await loadXboxAccounts();
         runBackfill('xbox');
       } catch (e) {
-        showToast(getErrorMessage(e, 'errors.bindFailed'), 'error');
+        if (e.code === 'browser_auth_cancelled') showToast(t('browser.cancelled'), '');
+        else showToast(getErrorMessage(e, 'errors.bindFailed'), 'error');
       } finally {
         setSettingsOperation(null);
       }

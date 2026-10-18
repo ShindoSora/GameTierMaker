@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 class GetPsnToken:
     @staticmethod
     def _get_cached_token():
+        from src.core.platform_credentials import read_credentials
+        protected = read_credentials("psn")
+        if protected:
+            token = protected.get("access_token", "")
+            return token if token and protected.get("expiration", 0) > time.time() else None
         config = ConfigHandler.read_config()
         token = ConfigHandler.deep_get(config, "psn_access_token") or ""
         expiration = int(ConfigHandler.deep_get(config, "psn_token_expiration") or 0)
@@ -33,15 +38,11 @@ class GetPsnToken:
 
     @staticmethod
     def _save_token(token, expires_in):
-        """将 PSN token 和过期时间写入 config.json。"""
+        """Encrypt browser-acquired tokens with Windows DPAPI."""
+        from src.core.platform_credentials import save_credentials
         expiration = int(time.time()) + expires_in - 120  # 提前 2 分钟过期
-        ConfigHandler.update_config_fields(
-            {
-                "psn_access_token": token,
-                "psn_token_expiration": expiration,
-            }
-        )
-        logger.info("PSN token 已保存到 config.json，过期时间: %d 秒后", expires_in)
+        save_credentials("psn", access_token=token, expiration=expiration)
+        logger.info("PSN 登录凭据已加密保存")
 
     @staticmethod
     def _expired_error():

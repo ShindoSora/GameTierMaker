@@ -32,12 +32,15 @@
     TierBoard,
     LogSidebar,
     SettingsPanel,
+    useBrowserPreview,
+    BrowserPreview,
     ColorPicker,
     TierContextMenu,
     PresetsDialog,
     LiquidGlassEffects,
   } = window.GameTierApp;
   function App() {
+    const browserModel = useBrowserPreview();
     const dialogsModel = useDialogs();
     const busyModel = useBusy();
     const preferencesModel = useUiPreferences();
@@ -85,6 +88,10 @@
       loadDownloadSettings: (...args) => downloadsModel.loadDownloadSettings(...args),
     });
     const steamModel = useSteamAccount({
+      authenticate: browserModel.authenticate,
+      steamKey: settingsModel.steamKey,
+      secretTouched: settingsModel.secretTouched,
+      configuredSecrets: settingsModel.configuredSecrets,
       getCurrentTemplate: templatesModel.getCurrentTemplate,
       runBackfill: (...args) => backfillModel.runBackfill(...args),
       currentId: templatesModel.currentId,
@@ -93,10 +100,8 @@
       confirmAction: (...args) => dialogsModel.confirmAction(...args),
     });
     const psnModel = usePsnAccount({
+      authenticate: browserModel.authenticate,
       psnOnlineId: settingsModel.psnOnlineId,
-      psnNpsso: settingsModel.psnNpsso,
-      secretTouched: settingsModel.secretTouched,
-      configuredSecrets: settingsModel.configuredSecrets,
       setSettingsOperation: (...args) => settingsModel.setSettingsOperation(...args),
       psnCategories: settingsModel.psnCategories,
       psnMinPlayDuration: settingsModel.psnMinPlayDuration,
@@ -108,6 +113,7 @@
       refreshSelectedTemplate: (...args) => templatesModel.refreshSelectedTemplate(...args),
     });
     const xboxModel = useXboxAccount({
+      authenticate: browserModel.authenticate,
       setSettingsOperation: (...args) => settingsModel.setSettingsOperation(...args),
       currentId: templatesModel.currentId,
       loadCurrentTemplate: (...args) => templatesModel.loadCurrentTemplate(...args),
@@ -116,6 +122,7 @@
       refreshSelectedTemplate: (...args) => templatesModel.refreshSelectedTemplate(...args),
     });
     const nintendoModel = useNintendoAccount({
+      authenticate: browserModel.authenticate,
       setSettingsOperation: (...args) => settingsModel.setSettingsOperation(...args),
       currentId: templatesModel.currentId,
       refreshSelectedTemplate: (...args) => templatesModel.refreshSelectedTemplate(...args),
@@ -314,6 +321,7 @@
         {
           <SettingsPanel
             island={settingsIsland}
+            browserModel={browserModel}
             logVisible={logIsland.visible}
             logAnchorRef={logAnchorRef}
             logToolbarRef={logToolbarRef}
@@ -329,6 +337,10 @@
             storageModel={storageModel}
           />
         }
+
+        {/* Browser preview fills the space beside settings. */}
+        <BrowserPreview model={browserModel} settingsIsland={settingsIsland}
+          settingsWidth={preferencesModel.settingsWidth} logVisible={logIsland.visible} logWidth={logsModel.logWidth} />
 
         {/* 颜色选择器 */}
         {<ColorPicker tierBoardModel={tierBoardModel} />}

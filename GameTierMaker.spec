@@ -7,6 +7,7 @@ from PyInstaller.utils.hooks import collect_submodules
 
 project_root = Path(SPECPATH)
 xbox_hiddenimports = collect_submodules('xbox')
+websocket_hiddenimports = collect_submodules('websockets')
 
 a = Analysis(
     [str(project_root / 'main.py')],
@@ -24,11 +25,13 @@ a = Analysis(
         'uvicorn.lifespan.on',
         'uvicorn.protocols.http.auto',
         'uvicorn.protocols.http.h11_impl',
+        'uvicorn.protocols.websockets.auto',
+        'uvicorn.protocols.websockets.websockets_impl',
         'fastapi',
         'PIL',
         'requests',
         'xbox.webapi.scripts.authenticate',
-    ] + xbox_hiddenimports,
+    ] + xbox_hiddenimports + websocket_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

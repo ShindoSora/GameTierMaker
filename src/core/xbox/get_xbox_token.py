@@ -1,11 +1,6 @@
-import logging
-import subprocess
-import sys
-
 from src.core.config_handler import ConfigHandler
-
-
-logger = logging.getLogger(__name__)
+from src.core.errors import CredentialMissingError
+from src.core.json_store import JsonStoreError
 
 
 class XboxLiveToken:
@@ -13,17 +8,8 @@ class XboxLiveToken:
         self.config = config or ConfigHandler()
 
     def get_xbox_live_token(self):
-        tokens_file = self.config.get_xbox_tokens_path()
-        if getattr(sys, "frozen", False):
-            command = [sys.executable, "--xbox-authenticate", tokens_file]
-        else:
-            command = ["xbox-authenticate", "--tokens", tokens_file]
-
         try:
-            subprocess.run(command, check=True)
-            json_str = self.config.get_xbox_data()
-            return json_str
-        except (OSError, subprocess.CalledProcessError) as exc:
-            logger.error("Xbox authentication failed: %s", exc)
-            return False
+            return self.config.get_xbox_data()
+        except (OSError, JsonStoreError):
+            raise CredentialMissingError("请点击绑定，在登录浏览器中完成 Xbox 验证", code="xbox_login_required") from None
 

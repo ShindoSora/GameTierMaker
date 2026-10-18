@@ -45,7 +45,23 @@ Launch the application:
 .\.venv\Scripts\python.exe .\main.py
 ```
 
-Visit http://localhost:8000 to access the application.
+The local webpage remains the default and prefers http://localhost:8000. If that port is unavailable, another available port is selected; use the URL printed in the startup log. Sign-in is operated inside the left browser panel. A verified running service for the same data directory is reused.
+
+Use `main.py --port 8001` for a fixed port. An explicitly requested unavailable port produces an error; `--port 0` asks the operating system to select a port.
+
+### Platform sign-in
+
+Save a Steam API key and click Link Steam Account; enter a PSN Online ID or Xbox gamertag and click Link; or open Nintendo sign-in. Complete sign-in and verification manually. The app receives the authorization result and links the account automatically, without copying NPSSO or Nintendo callback links.
+
+PSN reuses the installed WebView2 Runtime; other platforms reuse installed Edge, falling back to Chrome if necessary. An invisible background session sends frames and receives input through a local WebSocket. PSN uses an invisible, non-activating renderer and private process pipes. No browser extension or bundled Chromium is required, and personal browser profiles are not reused. Normal startup works; web mode can also be selected explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe .\main.py --browser
+```
+
+The panel supports clicks, scrolling, keyboard, paste, Unicode input, browser navigation and resizing. Collapsing pauses frames; closing cancels the session. Authorization credentials are DPAPI-protected, and input frames are excluded from transport debug logs.
+
+Real PSN account acceptance passed in the local webpage on 2026-10-17, covering panel sign-in, credential capture, encrypted storage, and account linking. Other platforms and a rebuilt EXE still need separate acceptance testing. OS passkey dialogs and browser password-manager autofill are not equivalent to using an ordinary webpage.
 
 ## Windows Executable
 
