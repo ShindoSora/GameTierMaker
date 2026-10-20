@@ -2,6 +2,8 @@
 设置与账号绑定 API
 """
 import json
+import asyncio
+import contextlib
 import os
 import threading
 import time
@@ -723,17 +725,51 @@ async def _backfill_image_events(mgr, source: str):
     """Publish committed per-cover results, including the initial work count."""
     ok = fail = deferred = 0
     remaining, retry_pending = await run_in_threadpool(mgr.get_backfill_status, source)
+    items = await run_in_threadpool(mgr.get_backfill_items, source)
 
     def state(event):
-        return {"event": event, "source": source, "ok": ok, "fail": fail,
+        return {"event": event, "detail_version": 1, "source": source, "ok": ok, "fail": fail,
                 "deferred": deferred, "remaining": remaining, "retry_pending": retry_pending}
 
-    yield state("start")
+    yield {**state("start"), "items": items}
     try:
         while remaining > 0:
             # Each update follows the existing save/rollback transaction. A slow cover
             # cannot hold back the progress of twenty already downloaded covers.
-            result = await run_in_threadpool(mgr.backfill_remote_images, limit=1, source=source)
+            updates = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+            reporting = threading.Event()
+            reporting.set()
+            last_report = [None, 0.0]
+            def report(item):
+                if not reporting.is_set():
+                    return
+                now = time.monotonic()
+                marker = (item["id"], item["status"])
+                if marker == last_report[0] and item["status"] == "downloading" and now - last_report[1] < .1:
+                    return
+                last_report[:] = [marker, now]
+                with contextlib.suppress(RuntimeError):
+                    loop.call_soon_threadsafe(updates.put_nowait, item)
+            async def download_one():
+                try:
+                    return await run_in_threadpool(mgr.backfill_remote_images, limit=1, source=source, on_progress=report)
+                finally:
+                    updates.put_nowait(None)
+            worker = asyncio.create_task(download_one())
+            try:
+                while True:
+                    item = await updates.get()
+                    if item is None:
+                        break
+                    yield {**state("update"), "item": item}
+                result = await worker
+            finally:
+                reporting.clear()
+                if not worker.done():
+                    worker.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await worker
             ok += result[0]
             fail += result[1]
             deferred += result[2]

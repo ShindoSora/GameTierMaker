@@ -3,7 +3,7 @@
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 14px 18px; border-bottom: 1px solid var(--divider-strong); flex-shrink: 0;
 }
-.settings-panel-header-actions { display: flex; align-items: center; gap: var(--settings-action-gap, 6px); flex-shrink: 0; }
+.settings-panel-header-actions { display: flex; align-items: flex-start; gap: var(--settings-action-gap, 6px); flex-shrink: 0; }
 .settings-panel-header-actions > .btn { white-space: nowrap; }
 .settings-panel-header .settings-panel-close {
   display: inline-flex; align-items: center; justify-content: center;

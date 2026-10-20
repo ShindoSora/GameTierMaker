@@ -1,0 +1,33 @@
+.download-queue-trigger { color:var(--text-primary); font:inherit; cursor:pointer; text-align:left; transition:border-color 180ms ease,background 180ms ease,box-shadow 180ms ease,transform 180ms ease; }
+.download-queue-trigger:active { transform:scale(.98); }
+.download-queue-trigger:hover, .download-queue-trigger[aria-expanded="true"] { border-color:var(--accent); }
+.download-queue-trigger:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.download-queue-panel { position:fixed; z-index:3600; width:min(460px,calc(100vw - 24px)); min-height:160px; display:flex; flex-direction:column; overflow:hidden; background:var(--panel-solid); color:var(--text-primary); border:1px solid var(--border-strong); border-radius:20px; box-shadow:0 20px 60px #0005; transform-origin:top left; }
+.download-queue-panel:is([data-island-state="opening"],[data-island-state="closing"]) { will-change:transform,border-radius,opacity; }
+.download-queue-panel[aria-hidden="true"] { pointer-events:none; }
+.download-queue-content { display:flex; flex-direction:column; flex:1; min-height:0; }
+.download-queue-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 18px 10px; }
+.download-queue-header h2 { margin:0; font-size:15px; font-weight:650; }
+.download-queue-header .btn { width:30px; height:30px; padding:0; }
+.download-queue-tabs { position:relative; isolation:isolate; display:flex; flex-shrink:0; gap:5px; margin:0 18px 8px; padding:4px; border-radius:12px; background:var(--control-bg); }
+.download-queue-tab-pill { position:absolute; left:0; top:0; visibility:hidden; z-index:0; pointer-events:none; border-radius:12px; background:var(--control-hover); box-shadow:0 1px 4px #0002; }
+.download-queue-tabs button { position:relative; z-index:1; flex:1; display:flex; justify-content:center; align-items:center; gap:8px; border:0; padding:9px 8px; background:transparent; color:var(--text-secondary); border-radius:9px; font:inherit; font-size:12px; cursor:pointer; transition:color 160ms ease; }
+.download-queue-tabs button[aria-selected="true"] { color:var(--text-primary); }
+.download-queue-tabs button > span { min-width:18px; font-size:10px; font-variant-numeric:tabular-nums; opacity:.8; }
+.download-queue-tabs button:focus-visible, .download-queue-header button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.download-queue-list { min-height:0; overflow:auto; overscroll-behavior:contain; padding:0 18px 8px; }
+.download-queue-item { padding:15px 0; border-bottom:1px solid var(--divider); }
+.download-queue-item:last-child { border-bottom:0; }
+.download-queue-name { display:flex; align-items:flex-start; gap:14px; margin-bottom:10px; }
+.download-queue-name strong { flex:1; min-width:0; font-size:12px; line-height:1.5; font-weight:550; overflow-wrap:anywhere; }
+.download-queue-percent { flex-shrink:0; min-width:34px; text-align:right; color:var(--text-secondary); font-size:11px; font-variant-numeric:tabular-nums; }
+.download-queue-progress { height:4px; border-radius:3px; overflow:hidden; background:var(--control-bg); }
+.download-queue-progress > span { display:block; width:0; height:100%; background:var(--accent); border-radius:inherit; transition:width 120ms linear; }
+.download-queue-progress[data-indeterminate="true"] > span { width:40%; animation:download-queue-pulse 1.5s ease-in-out infinite; }
+.download-queue-item[data-state="success"] .download-queue-progress > span { background:var(--success); }
+.download-queue-item:is([data-state="failed"],[data-state="deferred"],[data-state="interrupted"]) .download-queue-progress > span { background:var(--danger); }
+.download-queue-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 12px; margin-top:8px; color:var(--text-secondary); font-size:10px; font-variant-numeric:tabular-nums; }
+.download-queue-item[data-state="success"] .download-queue-meta > span:first-child { color:var(--success); }
+.download-queue-empty { padding:38px 10px; text-align:center; color:var(--text-secondary); font-size:12px; }
+@keyframes download-queue-pulse { from { transform:translateX(-100%); } to { transform:translateX(350%); } }
+@media (prefers-reduced-motion:reduce) { .download-queue-progress > span, .download-queue-trigger, .download-queue-tabs button { transition:none; animation:none; } .download-queue-trigger:active { transform:none; } }

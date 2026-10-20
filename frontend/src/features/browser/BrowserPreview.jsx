@@ -2,7 +2,7 @@
   'use strict';
 
   const { useState, useRef, useEffect, useLayoutEffect } = React;
-  const { t } = window.GameTierI18n;
+  const { t, getErrorMessage } = window.GameTierI18n;
   const { fetchAPI, ApiError, BrowserCanvas } = window.GameTierApp;
   const PLATFORMS = {
     steam: { name: 'Steam', host: 'steamcommunity.com', color: '#96b8dc' },
@@ -120,14 +120,12 @@
     const expanded = model.mode === 'expanded';
     return (
       <div className="browser-preview-launcher">
-        <div className="browser-launcher-label"><BrowserIcon /><span>{t('browser.title')}</span></div>
         <button ref={model.launchRef} type="button" className={`btn btn-sm ${expanded ? '' : 'btn-primary'}`}
           aria-expanded={expanded} aria-controls="browser-preview"
           disabled={!expanded && model.availableWidth < 120}
           onClick={() => expanded ? model.collapse() : model.open(section)}>
-          {t(expanded ? 'browser.collapse' : 'browser.launch')}
+          <BrowserIcon size={16} />{t(expanded ? 'browser.collapse' : 'browser.launch')}
         </button>
-        {model.availableWidth < 280 && <p className="browser-launcher-hint">{t('browser.spaceHint')}</p>}
       </div>
     );
   }
@@ -211,7 +209,7 @@
             <button ref={pillRef} type="button" className="browser-island-open" onClick={() => model.open(platform)}
               title={t('browser.expand')} aria-label={t('browser.expand')}>
               <BrowserIcon /><span>{info.name}</span><span className="browser-island-dot" />
-              <span className="browser-island-caption">{t('browser.title')}</span><BrowserIcon name="expand" size={15} />
+              <BrowserIcon name="expand" size={15} />
             </button>
             <button type="button" className="browser-icon-button" onClick={model.close} title={t('actions.close')} aria-label={t('actions.close')}>
               <BrowserIcon name="close" size={15} />
@@ -220,7 +218,7 @@
           <div className="browser-preview-content" inert={!expanded || mode !== 'expanded' ? '' : undefined} aria-hidden={!expanded || mode !== 'expanded'}>
             <header className="browser-chrome">
               <div className="browser-tab-row">
-                <div className="browser-brand"><BrowserIcon /><span>{t('browser.title')}</span></div>
+                <div className="browser-brand"><BrowserIcon /><span>{info.name}</span></div>
                 <div className="browser-window-actions">
                   <button ref={collapseRef} type="button" className="browser-icon-button" onClick={model.collapse}
                     title={t('browser.collapse')} aria-label={t('browser.collapse')}><BrowserIcon name="collapse" /></button>
@@ -233,7 +231,6 @@
                   disabled={auth?.status !== 'waiting' || model.viewer.connection !== 'connected' || (command === 'back' && !model.viewer.canBack) || (command === 'forward' && !model.viewer.canForward)} aria-label={t(`browser.${command}`)}
                   onClick={() => model.sendBrowser(command)}><BrowserIcon name={command} /></button>)}
                 <div className="browser-address"><BrowserIcon name="lock" size={14} /><span>{model.viewer.host || auth?.display_host || info.host}</span></div>
-                <span className="browser-preview-badge">{t(auth ? 'browser.login' : 'browser.preview')}</span>
               </div>
             </header>
             <div className="browser-viewport">
@@ -254,14 +251,12 @@
                   <div className="browser-art-window"><span /><BrowserIcon name="lock" size={30} /></div>
                   <span className="browser-art-chip">{info.name}</span>
                 </div>
-                <span className="browser-preview-eyebrow">{t(auth ? 'browser.login' : 'browser.preview')}</span>
                 <h2>{auth ? t(`browser.status.${auth.status}`) : t('browser.welcome', { platform: info.name })}</h2>
-                <p>{auth?.status === 'error' ? auth.message : t(auth ? 'browser.embeddedHelp' : 'browser.description')}</p>
-                <div className="browser-preview-note"><BrowserIcon name="lock" size={15} /><span>{t(auth ? 'browser.manualLogin' : 'browser.previewNote')}</span></div>
+                {auth?.status === 'error' && <p>{getErrorMessage({ code: auth.error, message: auth.message })}</p>}
               </div>
               )}
               </div>
-              <footer className="browser-status-bar"><span><i />{t(auth ? `browser.status.${auth.status}` : 'browser.ready')}</span><span>{t('browser.layoutHint')}</span></footer>
+              {auth && <footer className="browser-status-bar"><span><i />{t(`browser.status.${auth.status}`)}</span></footer>}
             </div>
           </div>
         </section>

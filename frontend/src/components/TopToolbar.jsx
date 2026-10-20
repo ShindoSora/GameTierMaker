@@ -226,9 +226,12 @@
 
         {/* 后台回填进度指示器 */}
         {backfill && (
-          <div
-            className="toolbar-group"
-            role="status"
+          <button
+            type="button" ref={backfillModel.downloadAnchorRef}
+            className="toolbar-group download-queue-trigger"
+            aria-label={t('downloads.title')} aria-expanded={backfillModel.downloadsOpen}
+            aria-haspopup="dialog" aria-controls="download-queue-panel"
+            onClick={() => backfillModel.setDownloadsOpen(previous => !previous)}
             style={{
               gap: 8,
               padding: '3px 10px',
@@ -363,7 +366,7 @@
                 </span>
               </div>
             )}
-          </div>
+          </button>
         )}
 
         <button ref={settingsAnchorRef} className="btn btn-sm settings-toolbar-button" onClick={handleOpenSettings} title={t('settings.title')}>

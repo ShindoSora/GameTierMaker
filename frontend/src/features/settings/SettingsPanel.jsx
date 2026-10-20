@@ -19,22 +19,20 @@
   } = window.GameTierApp;
   function GlassTransparencySlider({ value, enabled, onChange }) {
     const position = Math.max(0, Math.min(80, Number(value) || 0)) / 80;
-    const shape = 'M10 1 L22 1 Q24 1 26 3 L29 6 Q31 8 31 10 L31 20 Q31 22 29 24 L26 27 Q24 29 22 29 L10 29 Q8 29 6 27 L3 24 Q1 22 1 20 L1 10 Q1 8 3 6 L6 3 Q8 1 10 1 Z';
     return (
       <div className="glass-range-surface" data-disabled={!enabled ? 'true' : 'false'}
         style={{ '--glass-range-progress': `${position * 100}%`, '--glass-slider-position': position }}>
         <div className="glass-slider-control">
           <input id="glass-transparency" type="range" min="0" max="80" step="1"
+            aria-valuetext={`${value}%`}
             value={value} disabled={!enabled} onChange={event => onChange(Number(event.target.value))} />
           <span className="glass-range-thumb" aria-hidden="true">
             <span className="glass-slider-lens" />
-            <svg viewBox="0 0 32 30" focusable="false">
-              <path className="glass-thumb-depth" d={shape} transform="translate(0 .6)" />
-              <path className="glass-thumb-rim" d={shape} />
-              <path className="glass-thumb-highlight" d="M2 13 L2 10 Q2 8 4 6 L7 3 Q9 1.5 11 1.5 L21 1.5 Q24 1.5 26 3.5 L28 5.5" />
-              <path className="glass-thumb-inner" d="M7 25 Q9 27 11 27 L21 27 Q23 27 25 25 L28 22" />
-            </svg>
+            <span className="glass-thumb-shine" />
           </span>
+        </div>
+        <div className="glass-range-labels" aria-hidden="true">
+          <span>{t('settings.glass.opaque')}</span><span>{t('settings.glass.clear')}</span>
         </div>
       </div>
     );
@@ -149,6 +147,7 @@
           logButton.style.width = `${logRect.width}px`;
           logButton.style.height = `${logRect.height}px`;
           logButton.style.minHeight = `${logRect.height}px`;
+          logButton.style.marginTop = `${logRect.top - rect.top}px`;
           header.style.setProperty('--settings-action-gap', `${Math.max(0, logRect.left - rect.right)}px`);
         }
       };
@@ -219,10 +218,7 @@
                 cursor: 'col-resize',
                 zIndex: 10,
                 background: 'transparent',
-                transition: 'background 0.15s',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             />
             {/* Header */}
             <div
@@ -337,23 +333,29 @@
               </div>
               {/* Right content */}
               <div className="settings-content">
-                <BrowserPreviewLauncher model={browserModel} section={settingsActiveSection} />
+                {(settingsActiveSection.endsWith('_accounts') || browserModel.mode !== 'closed') &&
+                  <BrowserPreviewLauncher model={browserModel} section={settingsActiveSection} />}
                 {settingsActiveSection === 'appearance' && (
                   <div className="appearance-settings">
                     <SettingsSectionHeading title={t('settings.tabs.appearance')} />
+                    <div className="appearance-card">
                     <label className="glass-toggle-row">
                       <span>{t('settings.glass.enabled')}</span>
-                      <input type="checkbox" checked={preferencesModel.liquidGlassEnabled}
+                      <span className="glass-switch">
+                      <input type="checkbox" role="switch" checked={preferencesModel.liquidGlassEnabled}
                         onChange={event => preferencesModel.setLiquidGlassEnabled(event.target.checked)} />
+                      <span className="glass-switch-track" aria-hidden="true" />
+                      </span>
                     </label>
-                    <p className="glass-help">{t('settings.glass.description')}</p>
+                    <div className="appearance-slider-section" data-disabled={!preferencesModel.liquidGlassEnabled}>
                     <div className="glass-transparency-heading">
                       <label htmlFor="glass-transparency">{t('settings.glass.transparency')}</label>
                       <output htmlFor="glass-transparency">{preferencesModel.liquidGlassTransparency}%</output>
                     </div>
                     <GlassTransparencySlider value={preferencesModel.liquidGlassTransparency}
                       enabled={preferencesModel.liquidGlassEnabled} onChange={preferencesModel.setLiquidGlassTransparency} />
-                    <p className="glass-help">{t('settings.glass.hint')}</p>
+                    </div>
+                    </div>
                   </div>
                 )}
                 {settingsOperation && (
@@ -366,15 +368,6 @@
                         }}
                       >
                         {t(settingsOperation.labelKey)}
-                      </div>
-                      <div
-                        style={{
-                          marginTop: 2,
-                          color: 'var(--text-secondary)',
-                          fontSize: 11,
-                        }}
-                      >
-                        {t('settings.operationLogHint')}
                       </div>
                     </div>
                   </div>

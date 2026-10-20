@@ -231,15 +231,6 @@
               </a>{' '}
               {t('settings.steamgriddbHelpAfter')}
             </p>
-            <p
-              style={{
-                marginTop: 8,
-                fontSize: 11,
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {t('settings.vndbNoKey')}
-            </p>
           </div>
 
           <div className="section-divider" />

@@ -3,8 +3,8 @@
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const GLASS_OPTICAL_SURFACES = '.settings-panel.island-panel, .log-sidebar.island-panel, '
-    + '.tier-color-dialog, .context-menu, .confirm-dialog, .search-panel, '
-    + '.search-source-pill, .glass-range-surface, .glass-slider-lens';
+    + '.tier-color-dialog, .search-panel, '
+    + '.search-source-pill, .glass-slider-lens';
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   let filterSequence = 0;
 

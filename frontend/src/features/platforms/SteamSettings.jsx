@@ -103,15 +103,6 @@
             </button>
           </div>
           {/* Steam 绑定跳转 */}
-          <p
-            style={{
-              marginBottom: 12,
-              fontSize: 13,
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {t('steam.bindHelp')}
-          </p>
           <button
             className="btn btn-sm"
             onClick={handleSteamJump}

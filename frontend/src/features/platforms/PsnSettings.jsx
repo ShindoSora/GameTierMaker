@@ -26,7 +26,6 @@
       settingsActiveSection === 'psn_accounts' && (
         <div>
           <SettingsSectionHeading title="PSN" />
-          <p className="platform-login-help">{t('psn.browserHelp')}</p>
           {/* 平台筛选 */}
           <div
             style={{
@@ -44,12 +43,7 @@
             >
               {t('psn.platformFilterBind')}
             </label>
-            <div
-              style={{
-                display: 'flex',
-                gap: 16,
-              }}
-            >
+            <div className="psn-category-options">
               {[
                 {
                   key: 'ps4_game',
@@ -66,23 +60,7 @@
               ].map((cat) => (
                 <label
                   key={cat.key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    color: 'var(--text-primary)',
-                    padding: '4px 10px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: psnCategories.includes(cat.key)
-                      ? 'var(--accent-glow)'
-                      : 'var(--surface)',
-                    border: psnCategories.includes(cat.key)
-                      ? '1px solid var(--accent)'
-                      : '1px solid var(--border)',
-                    transition: 'all var(--transition-fast)',
-                  }}
+                  className="psn-category-option"
                 >
                   <input
                     type="checkbox"
@@ -200,13 +178,7 @@
             >
               {t('psn.platformFilterSync')}
             </label>
-            <div
-              style={{
-                display: 'flex',
-                gap: 12,
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className="psn-category-options">
               {[
                 {
                   key: 'ps4_game',
@@ -223,22 +195,7 @@
               ].map((cat) => (
                 <label
                   key={cat.key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    color: 'var(--text-primary)',
-                    padding: '3px 8px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: psnCategories.includes(cat.key)
-                      ? 'var(--accent-glow)'
-                      : 'var(--surface)',
-                    border: psnCategories.includes(cat.key)
-                      ? '1px solid var(--accent)'
-                      : '1px solid var(--border)',
-                  }}
+                  className="psn-category-option"
                 >
                   <input
                     type="checkbox"

@@ -21,6 +21,7 @@
     useXboxAccount,
     useNintendoAccount,
     useImageBackfill,
+    DownloadPanel,
     useStorageActions,
     useIslandPanel,
     clearRefreshNotice,
@@ -341,6 +342,7 @@
         {/* Browser preview fills the space beside settings. */}
         <BrowserPreview model={browserModel} settingsIsland={settingsIsland}
           settingsWidth={preferencesModel.settingsWidth} logVisible={logIsland.visible} logWidth={logsModel.logWidth} />
+        <DownloadPanel model={backfillModel} />
 
         {/* 颜色选择器 */}
         {<ColorPicker tierBoardModel={tierBoardModel} />}

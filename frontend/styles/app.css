@@ -3,10 +3,12 @@
 @import url("./tier-board.css?v=20261013-tier-morph");
 @import url("./layout.css?v=20261013-controls");
 @import url("./components.css?v=20261018-group-motion");
-@import url("./logs.css?v=20261014-log-selection");
-@import url("./settings.css?v=20261013-controls");
+@import url("./logs.css?v=20261020-resize-handles");
+@import url("./settings.css?v=20261019-control-alignment");
 @import url("./overrides.css?v=20261016-nintendo-sync");
 @import url("./theme-switch.css?v=20261016-sky-switch");
-@import url("./glass.css?v=20261014-polygon-thumb");
+@import url("./glass.css?v=20261018-rounded-slider");
 @import url("./search-panel.css?v=20261012-search-exit");
-@import url("./browser-preview.css?v=20261015-browser-stream");
+@import url("./browser-preview.css?v=20261020-user-copy");
+@import url("./download-queue.css?v=20261020-download-motion");
+@import url("./refinements.css?v=20261019-toolbar-restored");

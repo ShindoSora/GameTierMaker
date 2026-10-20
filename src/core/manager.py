@@ -535,6 +535,7 @@ class ProjectManager:
         game_name="",
         *,
         raise_errors=False,
+        on_progress=None,
     ):
         """下载到源缓存目录。缓存命中直接返回路径；404 返回 '__404__'；失败返回 ''。"""
         target = self._source_cache_path(source, safe_cache_key(file_id))
@@ -561,7 +562,7 @@ class ProjectManager:
         if isinstance(url, str) and "t_thumb" in url:
             url = url.replace("t_thumb", "t_1080p")
         try:
-            downloaded_path = download_public_image(url, target)
+            downloaded_path = download_public_image(url, target, **({"on_progress": on_progress} if on_progress else {}))
             logger.info(
                 "源缓存下载成功: 游戏=%s, url=%s -> %s",
                 display_name,
@@ -1840,7 +1841,7 @@ class ProjectManager:
     #         self.save_project()
     #     return count
 
-    def backfill_remote_images(self, steam_id="", limit=0, source=""):
+    def backfill_remote_images(self, steam_id="", limit=0, source="", *, on_progress=None):
         """后台下载远程图片到本地。先将原图存入 source cache，再复制到 images/。
         limit>0 时每次最多处理 limit 张。返回 (ok, fail)。"""
         with self._backfill_lock:
@@ -1848,6 +1849,7 @@ class ProjectManager:
                 steam_id=steam_id,
                 limit=limit,
                 source=source,
+                on_progress=on_progress,
             )
 
     @staticmethod
@@ -1883,6 +1885,21 @@ class ProjectManager:
                     actionable += 1
             return actionable, retry_pending
 
+    def _backfill_item(self, meta, status="queued", **progress):
+        platform = next((name for name in ("steam", "psn", "xbox", "nintendo")
+                         if self._matches_backfill_source(meta, name)), "cache")
+        game_id = os.path.splitext(meta.original_name or "")[0] or meta.id
+        return {"id": meta.id, "key": f"{platform}:{game_id}", "source": platform,
+                "name": (meta.game_name or "").strip() or game_id, "status": status,
+                "loaded": 0, "total": None, "progress": 0, **progress}
+
+    def get_backfill_items(self, source=""):
+        now = time.time()
+        with self._save_lock:
+            return [self._backfill_item(meta, "deferred" if self._backfill_retry_after.get(meta.id, 0) > now else "queued")
+                    for meta in self.project_data.shared_images_meta.values()
+                    if meta.is_remote and not meta.remote_failed and self._matches_backfill_source(meta, source)]
+
     @staticmethod
     def _is_retryable_image_error(exc: AppError) -> bool:
         if isinstance(exc, (RemoteTimeoutError, ImageImportError)):
@@ -1901,10 +1918,19 @@ class ProjectManager:
             and exc.code not in terminal_response_codes
         )
 
-    def _backfill_remote_images_serialized(self, steam_id="", limit=0, source=""):
+    def _backfill_remote_images_serialized(self, steam_id="", limit=0, source="", *, on_progress=None):
         """串行执行回填；网络请求在总数据锁外，状态提交在锁内。"""
         ok = fail = deferred = 0
         pending_results: list[tuple[str, str, str]] = []
+        item_progress = {}
+        def report(meta, status, **values):
+            item = {**item_progress.get(meta.id, self._backfill_item(meta)), "status": status, **values}
+            item_progress[meta.id] = item
+            if on_progress:
+                try:
+                    on_progress(dict(item))
+                except Exception:
+                    pass
         now = time.time()
         with self._save_lock:
             remote_ids = [
@@ -1929,6 +1955,11 @@ class ProjectManager:
                     continue
                 meta = copy.copy(current_meta)
 
+            report(meta, "downloading", progress=None)
+            def transfer(loaded, total):
+                report(meta, "downloading", loaded=loaded, total=total,
+                       progress=min(99, int(loaded / total * 100)) if total else None)
+
             appid = meta.original_name.replace(".jpg", "").replace(".png", "")
             source_group_id = getattr(meta, "source_group_id", "")
             if source_group_id.startswith("nintendo:"):
@@ -1944,6 +1975,7 @@ class ProjectManager:
                     appid,
                     game_name=meta.game_name,
                     raise_errors=True,
+                    **({"on_progress": transfer} if on_progress else {}),
                 )
             except AppError as exc:
                 if self._is_retryable_image_error(exc):
@@ -1963,7 +1995,9 @@ class ProjectManager:
                     meta.path,
                 )
                 try:
-                    local_path = self._search_fallback_download(image_id, meta)
+                    report(meta, "searching", loaded=0, total=None, progress=None)
+                    local_path = self._search_fallback_download(image_id, meta,
+                        **({"on_progress": transfer} if on_progress else {}))
                 except AppError as exc:
                     if self._is_retryable_image_error(exc):
                         fallback_retryable = True
@@ -1975,6 +2009,7 @@ class ProjectManager:
                     local_path = ""
             else:
                 try:
+                    report(meta, "saving")
                     local_path = self.image_svc.copy_from_cache(image_id, cache_path)
                 except AppError as exc:
                     logger.warning(
@@ -1991,6 +2026,7 @@ class ProjectManager:
             if not local_path and (source_retryable or fallback_retryable):
                 self._backfill_retry_after[image_id] = time.time() + 60
                 deferred += 1
+                report(meta, "deferred")
                 continue
 
             pending_results.append((image_id, meta.path, local_path))
@@ -2054,6 +2090,10 @@ class ProjectManager:
                     if local_path:
                         self._delete_image_files_best_effort(image_id)
                 raise
+            # Success is public only after the metadata transaction has committed.
+            for image_id, meta, *_ in applied:
+                report(meta, "success" if not meta.is_remote else "failed",
+                       **({"progress": 100} if not meta.is_remote else {}))
             remaining = sum(
                 1
                 for meta in self.project_data.shared_images_meta.values()
@@ -2070,7 +2110,7 @@ class ProjectManager:
         )
         return ok, fail, deferred
 
-    def _search_fallback_download(self, image_id, meta) -> str:
+    def _search_fallback_download(self, image_id, meta, *, on_progress=None) -> str:
         """搜索兜底并返回本地相对路径；元数据由调用方在锁内提交。"""
         _log = logger
         name = (meta.game_name or "").strip()
@@ -2114,6 +2154,7 @@ class ProjectManager:
                 appid,
                 game_name=name,
                 raise_errors=True,
+                **({"on_progress": on_progress} if on_progress else {}),
             )
         except AppError as exc:
             if self._is_retryable_image_error(exc):

@@ -336,11 +336,8 @@
               cursor: 'col-resize',
               flexShrink: 0,
               background: 'transparent',
-              transition: 'background 0.15s',
               zIndex: 5,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           />
         )}
         </div>

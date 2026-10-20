@@ -344,7 +344,7 @@ def _get_local_cover_proxy(url: str) -> str | None:
     return proxy_url
 
 
-def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
+def download_public_image(url: str, destination: str | os.PathLike[str], *, on_progress=None) -> str:
     """Stream a public HTTP(S) image to disk and return the final path.
 
     Redirects are handled manually so every hop receives the same scheme and
@@ -446,6 +446,7 @@ def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
             )
 
         content_length = response.headers.get("Content-Length")
+        declared_size = None
         if content_length:
             try:
                 declared_size = int(content_length)
@@ -460,7 +461,16 @@ def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
                     code="remote_image_too_large",
                 )
 
+        expected_size = declared_size if response.headers.get("Content-Encoding", "identity").lower() == "identity" else None
+        def report_progress(loaded):
+            if on_progress:
+                try:
+                    on_progress(loaded, expected_size)
+                except Exception:
+                    pass  # Observers must not change image validation or saving.
+
         total = 0
+        report_progress(total)
         try:
             with temporary_path.open("xb") as output:
                 for chunk in response.iter_content(chunk_size=STREAM_CHUNK_SIZE):
@@ -473,6 +483,7 @@ def download_public_image(url: str, destination: str | os.PathLike[str]) -> str:
                             code="remote_image_too_large",
                         )
                     output.write(chunk)
+                    report_progress(total)
         except requests.exceptions.Timeout as exc:
             raise RemoteTimeoutError(
                 "远程图片下载超时，请检查网络连接",

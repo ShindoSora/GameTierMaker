@@ -9,7 +9,7 @@
     const { handleClearLogFile } = logsModel;
     return (
       settingsActiveSection === 'storage' && (
-        <div>
+        <div className="storage-settings">
           <SettingsSectionHeading title={t('settings.tabs.cleanup')} />
           <p
             style={{
@@ -20,13 +20,7 @@
           >
             {t('storage.description')}
           </p>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
-            }}
-          >
+          <div className="storage-cache-grid">
             {[
               {
                 key: 'steam',
@@ -72,12 +66,13 @@
                 {s.label}
               </button>
             ))}
+          </div>
+          <div className="storage-maintenance">
             <button
               className="btn btn-sm"
               onClick={handleClearLogFile}
               style={{
                 justifyContent: 'center',
-                marginTop: 8,
               }}
             >
               {t('storage.clearLogFile')}
@@ -87,20 +82,18 @@
               onClick={() => handleClearSource('')}
               style={{
                 justifyContent: 'center',
-                marginTop: 8,
               }}
             >
               {t('storage.clearAllSources')}
             </button>
+          </div>
+          <div className="storage-danger-zone">
+            <h3>{t('storage.projectData')}</h3>
             <button
               className="btn btn-sm btn-danger"
               onClick={handleResetAllImages}
               style={{
                 justifyContent: 'center',
-                marginTop: 8,
-                background: 'var(--danger)',
-                borderColor: 'var(--danger)',
-                color: '#fff',
               }}
             >
               {t('storage.resetProject')}

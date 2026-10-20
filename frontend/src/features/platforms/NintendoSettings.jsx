@@ -20,16 +20,6 @@
       settingsActiveSection === 'nintendo_accounts' && (
         <div>
           <SettingsSectionHeading title="Nintendo" />
-          <p
-            style={{
-              margin: '0 0 12px',
-              fontSize: 12,
-              color: 'var(--text-secondary)',
-              lineHeight: 1.7,
-            }}
-          >
-            {t('nintendo.bindHelp')}
-          </p>
           <button
             className="btn btn-sm btn-primary"
             onClick={handleNintendoStart}

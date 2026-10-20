@@ -106,10 +106,18 @@
     }
   }
   function fetchBackfillStream(path, options, onEvent) {
+    const validItem = item => item && typeof item.id === 'string' && typeof item.key === 'string'
+      && typeof item.name === 'string' && typeof item.source === 'string'
+      && ['queued', 'downloading', 'searching', 'saving', 'success', 'failed', 'deferred'].includes(item.status)
+      && Number.isInteger(item.loaded) && item.loaded >= 0
+      && (item.total === null || Number.isInteger(item.total) && item.total >= 0)
+      && (item.progress === null || Number.isInteger(item.progress) && item.progress >= 0 && item.progress <= 100);
     return fetchAPIStream(path, options, onEvent, {
       validate: event => ['ok', 'fail', 'deferred', 'remaining', 'retry_pending']
         .every(key => Number.isInteger(event[key]) && event[key] >= 0)
-        && (event.event !== 'done' || event.remaining === 0),
+        && (event.event !== 'done' || event.remaining === 0)
+        && (!event.items || Array.isArray(event.items) && event.items.every(validItem))
+        && (!event.item || validItem(event.item)),
       interruptedCode: 'backfill_stream_interrupted', interruptedMessage: 'backfill.interrupted',
     });
   }
