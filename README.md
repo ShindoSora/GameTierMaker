@@ -13,8 +13,10 @@ Game Tier Maker 是一个在本地运行的游戏 Tier List 制作工具
 
 程序可以新建多个排序模板，右键等级行可以更改颜色，双击可以改名
 <!-- <img width="1573" height="1013" alt="image" src="https://github.com/user-attachments/assets/58bbc950-6918-4c82-9c9e-028d371b753e" /> -->
-<img width="1258" height="807" alt="image" src="https://github.com/user-attachments/assets/c2271281-2f59-4a36-8dc7-8ef68bdaee93" />
-<img width="1261" height="809" alt="image" src="https://github.com/user-attachments/assets/ad95dbea-d08b-4ae9-9151-286175818cd1" />
+<!-- <img width="1258" height="807" alt="image" src="https://github.com/user-attachments/assets/c2271281-2f59-4a36-8dc7-8ef68bdaee93" /> -->
+<img width="1665" height="1012" alt="image" src="https://github.com/user-attachments/assets/72b58ba5-e698-46c4-9f8d-010ca3ad90cd" />
+<img width="1668" height="1008" alt="image" src="https://github.com/user-attachments/assets/02fdbdd2-4fc6-45ba-a868-3e94480b55f8" />
+<!-- <img width="1261" height="809" alt="image" src="https://github.com/user-attachments/assets/ad95dbea-d08b-4ae9-9151-286175818cd1" /> -->
 <!-- <img width="1571" height="992" alt="image" src="https://github.com/user-attachments/assets/a247ae21-bab6-4458-bd23-2310d4f4ae77" /> -->
 
 
