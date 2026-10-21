@@ -75,12 +75,11 @@ class BrowserAuth:
         self.lock = threading.RLock()
         self.jobs = {}
         self.host = None
-        self.psn_host = None
         self.blocked_until = {}
 
     def start(self, prepare, *, platform=""):
         with self.lock:
-            host = self.psn_host if platform == "psn" and self.psn_host is not None else self.host
+            host = self.host
             if host is None:
                 raise AppError("后台浏览器尚未就绪，请重新启动程序", code="local_browser_start_failed")
             now = time.monotonic()

@@ -1,12 +1,13 @@
 """
-Game Tier Maker — 本地网页 + 可选 Webview 桌面端
+Game Tier Maker — 本地网页 + Webview 桌面端
 ==================================================
 启动方式:
   python main.py                → 本地网页服务（左侧可操作浏览器面板）
   python main.py --debug        → 网页调试服务 + DEBUG 日志
   python main.py --desktop      → 桌面窗口（含内置登录浏览器）
-  python main.py --browser      → 本地网页服务（与默认模式相同）
-  GameTierMaker.exe             → 启动本地网页并在默认浏览器打开
+  python main.py --browser      → 本地网页服务（源码运行的默认模式）
+  GameTierMaker.exe             → 桌面窗口（复用系统 WebView2 Runtime）
+  GameTierMaker.exe --browser   → 在默认浏览器打开本地网页
 """
 
 import os, sys, logging, traceback, threading, argparse, socket, time
@@ -107,9 +108,9 @@ os.environ["GAMELIST_ROOT"] = ROOT_DIR
 parser = argparse.ArgumentParser(description="Game Tier Maker")
 parser.add_argument("--debug", action="store_true", help="调试模式")
 launch_mode = parser.add_mutually_exclusive_group()
-launch_mode.add_argument("--desktop", dest="desktop", action="store_true", help="使用可选桌面主窗口")
-launch_mode.add_argument("--browser", dest="desktop", action="store_false", help="使用本地网页（默认），支持左侧浏览器面板")
-parser.set_defaults(desktop=False)
+launch_mode.add_argument("--desktop", dest="desktop", action="store_true", help="使用桌面主窗口（打包版默认）")
+launch_mode.add_argument("--browser", dest="desktop", action="store_false", help="使用本地网页（源码运行默认），支持左侧浏览器面板")
+parser.set_defaults(desktop=IS_FROZEN)
 parser.add_argument("--port", type=int, default=None,
                     help="固定使用指定端口；默认尝试 8000，不可用时自动选择；0 为自动分配")
 parser.add_argument(
@@ -177,11 +178,9 @@ logging.captureWarnings(True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from src.core.browser_auth import browser_auth
-    from src.core.reused_browser import ReusedBrowserHost
     from src.core.webview_browser import WebViewBrowserHost
     if browser_auth.host is None:
-        browser_auth.host = ReusedBrowserHost()
-    browser_auth.psn_host = WebViewBrowserHost()
+        browser_auth.host = WebViewBrowserHost()
     for sub in ("steam", "igdb", "bangumi", "xbox", "cache"):
         (DATA_DIR / sub).mkdir(parents=True, exist_ok=True)
     logger.info("API 服务已启动 - data: %s, resources: %s", DATA_DIR, RESOURCE_DIR)
@@ -528,13 +527,13 @@ if __name__ == "__main__":
             logger.critical("后端%s: %s", "启动超时" if server_thread.is_alive() else "启动失败", APP_URL)
             raise SystemExit(1)
         if args.desktop:
-            # 可选桌面模式 → 嵌入式 webview 窗口
+            # 打包版默认使用嵌入式 webview 桌面窗口。
             logger.info("启动桌面应用窗口: %s", APP_URL)
             _run_webview(APP_URL)
             logger.info("桌面主窗口已结束，将停止 API 服务")
 
         else:
-            # 默认保留本地网页；打包版同时打开默认浏览器。
+            # 源码默认保留本地网页；打包版仅在显式 --browser 时打开默认浏览器。
             logger.info("%s", APP_URL)
             if IS_FROZEN:
                 import webbrowser

@@ -36,9 +36,16 @@ class WebViewBrowserSession(ReusedBrowserSession):
         self.transport = PipeTransport.from_helper(self.process, self._event)
         self.root = self.transport.root
         self.clients.append(self.root)
-        await self.root.send("Browser.getVersion", timeout=20)
-        target = await self.root.send("Target.createTarget", {"url": "about:blank"}, timeout=20)
-        await self._attach(target["targetId"])
+        try:
+            await self.root.send("Browser.getVersion", timeout=20)
+            await self.root.send("Browser.setLoginPolicy", {
+                "platform": self.spec.platform, "callback": self.spec.callback,
+            })
+            target = await self.root.send("Target.createTarget", {"url": "about:blank"}, timeout=20)
+            await self._attach(target["targetId"])
+        except (OSError, RuntimeError, TimeoutError):
+            raise AppError("无法打开登录页面，请安装或修复 Microsoft Edge WebView2 Runtime 后重试",
+                           code="local_browser_start_failed") from None
 
     async def _attach(self, target_id, ws_url=None):
         if target_id in self.pages or target_id in self.attaching or self.closing:

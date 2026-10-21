@@ -45,23 +45,13 @@ Launch the application:
 .\.venv\Scripts\python.exe .\main.py
 ```
 
-The local webpage remains the default and prefers http://localhost:8000. If that port is unavailable, another available port is selected; use the URL printed in the startup log. Sign-in is operated inside the left browser panel. A verified running service for the same data directory is reused.
+By default, the local web service stays running. Open http://localhost:8000 first. If port 8000 is unavailable, another available port is selected automatically; use the URL printed in the startup log. Complete sign-in in the left browser panel. If a service for the same directory is already running, it will be reused.
 
 Use `main.py --port 8001` for a fixed port. An explicitly requested unavailable port produces an error; `--port 0` asks the operating system to select a port.
 
 ### Platform sign-in
 
-Save a Steam API key and click Link Steam Account; enter a PSN Online ID or Xbox gamertag and click Link; or open Nintendo sign-in. Complete sign-in and verification manually. The app receives the authorization result and links the account automatically, without copying NPSSO or Nintendo callback links.
-
-PSN reuses the installed WebView2 Runtime; other platforms reuse installed Edge, falling back to Chrome if necessary. An invisible background session sends frames and receives input through a local WebSocket. PSN uses an invisible, non-activating renderer and private process pipes. No browser extension or bundled Chromium is required, and personal browser profiles are not reused. Normal startup works; web mode can also be selected explicitly:
-
-```powershell
-.\.venv\Scripts\python.exe .\main.py --browser
-```
-
-The panel supports clicks, scrolling, keyboard, paste, Unicode input, browser navigation and resizing. Collapsing pauses frames; closing cancels the session. Authorization credentials are DPAPI-protected, and input frames are excluded from transport debug logs.
-
-Real PSN account acceptance passed in the local webpage on 2026-10-17, covering panel sign-in, credential capture, encrypted storage, and account linking. Other platforms and a rebuilt EXE still need separate acceptance testing. OS passkey dialogs and browser password-manager autofill are not equivalent to using an ordinary webpage.
+For Steam, enter and save an API key, then click "Link Steam Account". For PSN, enter your Online ID and click "Link". For Xbox, enter your gamertag and click "Link". For Nintendo, click "Open Nintendo Sign-In". Complete platform sign-in and verification manually; the application links the account automatically.
 
 ## Windows Executable
 
@@ -93,7 +83,9 @@ The main features of this project run locally. Locally imported images, Tier Lis
 
 When you use game search, cover download, or platform account linking features, the application sends network requests to the corresponding third-party services.
 
-Third-party services may require API keys, client secrets, login tokens, or other authorization credentials. This information is stored in the local configuration directory.
+During platform sign-in, the information you enter is submitted to the corresponding platform for authentication. Authorization credentials and related account data obtained by the application are stored on your computer for account linking and subsequent synchronization.
+
+Third-party services require API keys, client secrets, login tokens, or other authorization credentials. This information is stored in the local configuration directory.
 
 ## Third-Party Services
 
@@ -105,14 +97,13 @@ All rights to game titles, cover images, trademarks, and other third-party conte
 
 ## Acknowledgments
 
-* The overall format and some of the interaction designs of this project were inspired by [TierMaker](https://tiermaker.com/).
-* The development of the PlayStation Network-related features referenced the following projects:
-
-  * [PlayStation-Trophies](https://github.com/andshrew/PlayStation-Trophies/)
-  * [PSN-API](https://github.com/achievements-app/psn-api)
-* The Xbox-related features use the [xbox-webapi-python](https://github.com/OpenXbox/xbox-webapi-python) project.
-* The Nintendo play-activity feature references [Raycast Switch Game Play History](https://github.com/raycast/extensions/tree/main/extensions/switch-game-play-history) and [nintendo-go](https://github.com/wolveix/nintendo-go) .
-* Thanks to [Steam](https://store.steampowered.com/), [Bangumi](https://bangumi.tv/), [IGDB](https://www.igdb.com/), [VNDB](https://vndb.org/), and [SteamGridDB](https://www.steamgriddb.com/) for providing the relevant platform services or data APIs.
+- The overall format and some of the interaction designs of this project were inspired by [TierMaker](https://tiermaker.com/).
+- The development of the PlayStation Network-related features referenced the following projects:
+  - [PlayStation-Trophies](https://github.com/andshrew/PlayStation-Trophies/)
+  - [PSN-API](https://github.com/achievements-app/psn-api)
+- The Xbox-related features use the [xbox-webapi-python](https://github.com/OpenXbox/xbox-webapi-python) project.
+- The authorization flow and API research for the Nintendo play-history feature referenced [Raycast Switch Game Play History](https://github.com/raycast/extensions/tree/main/extensions/switch-game-play-history) and [nintendo-go](https://github.com/wolveix/nintendo-go).
+- Thanks to [Steam](https://store.steampowered.com/), [Bangumi](https://bangumi.tv/), [IGDB](https://www.igdb.com/), [VNDB](https://vndb.org/), and [SteamGridDB](https://www.steamgriddb.com/) for providing the relevant platform services or data APIs.
 
 ## License
 
@@ -126,12 +117,8 @@ Game Tier Maker uses third-party open-source components. Each component remains 
 
 xbox-webapi
 
-* Project: `xbox-webapi-python`
-* Copyright: Copyright (c) 2020 OpenXbox
-* License: MIT License
-* Project repository: [xbox-webapi-python](https://github.com/OpenXbox/xbox-webapi-python)
-* Full license text: [xbox-webapi-LICENSE.txt](xbox-webapi-LICENSE.txt)
-
-## Translate
-
-The English version of this README was translated with assistance from GPT
+- Project: `xbox-webapi-python`
+- Copyright: Copyright (c) 2020 OpenXbox
+- License: MIT License
+- Project repository: [xbox-webapi-python](https://github.com/OpenXbox/xbox-webapi-python)
+- Full license text: [xbox-webapi-LICENSE.txt](xbox-webapi-LICENSE.txt)

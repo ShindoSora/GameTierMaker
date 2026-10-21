@@ -7,6 +7,9 @@ import secrets
 import sys
 import tempfile
 import threading
+from urllib.parse import urlsplit
+
+from src.core.browser_auth import HOSTS, BrowserSpec, allowed_navigation, is_callback
 
 
 def _stdio_streams():
@@ -139,7 +142,7 @@ def main(profile):
         Application.ThreadException += lambda sender, args: form.Close()
         pages = {}
         session_pages = {}
-        state = {"discover": False, "environment": None, "closing": False}
+        state = {"discover": False, "environment": None, "closing": False, "login_spec": None}
         callbacks = []
 
         def reply(packet, result=None, failed=False):
@@ -183,9 +186,18 @@ def main(profile):
                 core.Settings.AreDevToolsEnabled = False
                 core.Settings.IsStatusBarEnabled = False
                 core.DownloadStarting += cancel_download
-                core.NewWindowRequested += new_window
+                def opening(sender, args, target=page):
+                    new_window(target, args)
+                def navigating(sender, args, target=page):
+                    uri = str(args.Uri)
+                    if capture_custom_callback(target, uri) or urlsplit(uri).scheme not in {"https", "http", "about"}:
+                        args.Cancel = True
+                callbacks.extend([opening, navigating])
+                core.NewWindowRequested += opening
+                core.NavigationStarting += navigating
                 for name in ("Page.screencastFrame", "Fetch.requestPaused", "Page.frameNavigated",
-                             "Page.loadEventFired", "Network.responseReceived", "Runtime.bindingCalled"):
+                             "Page.loadEventFired", "Network.responseReceived", "Runtime.bindingCalled",
+                             "Page.frameRequestedNavigation", "Page.frameScheduledNavigation", "Page.frameStartedNavigating"):
                     receiver = core.GetDevToolsProtocolEventReceiver(name)
                     def received(sender, args, method=name, target=page):
                         if target["session"] and not state["closing"]:
@@ -211,11 +223,25 @@ def main(profile):
         def cancel_download(sender, args):
             args.Cancel = True
 
-        def new_window(sender, args):
-            from src.core.browser_auth import BrowserSpec, allowed_navigation
+        def capture_custom_callback(page, uri):
+            spec = state["login_spec"]
+            if spec is None or spec.platform != "nintendo" or not is_callback(uri, spec.callback):
+                return False
+            if page["session"]:
+                event("Page.frameRequestedNavigation", {"url": uri}, page["session"])
+            return True
+
+        def new_window(page, args):
             uri = str(args.Uri)
-            if not allowed_navigation(BrowserSpec("psn", uri), uri):
+            spec = state["login_spec"]
+            if capture_custom_callback(page, uri) or spec is None or not allowed_navigation(spec, uri):
                 args.Handled = True
+                return
+            if is_callback(uri, spec.callback):
+                # Keep HTTP callbacks on the configured page, so an immediately
+                # redirected popup cannot outrun the parent's event attachment.
+                args.Handled = True
+                page["control"].CoreWebView2.Navigate(uri)
                 return
             deferral = args.GetDeferral()
             create_page(uri, lambda _: None, (args, deferral))
@@ -233,6 +259,13 @@ def main(profile):
                                  "focused": bool(form.ContainsFocus)}})
                     return
                 if method == "Browser.setDownloadBehavior":
+                    reply(packet)
+                    return
+                if method == "Browser.setLoginPolicy":
+                    if params.get("platform") not in HOSTS:
+                        reply(packet, failed=True)
+                        return
+                    state["login_spec"] = BrowserSpec(params["platform"], "", params.get("callback", ""))
                     reply(packet)
                     return
                 if method == "Target.setDiscoverTargets":
