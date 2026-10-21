@@ -13,12 +13,11 @@ You can import local images into the application.
 
 The application supports creating multiple sorting templates. You can right-click a tier row to change its color and double-click it to rename it.
 
-<img width="1263" height="807" alt="image" src="https://github.com/user-attachments/assets/d118b779-87eb-4097-919c-859ce57da01f" />
-
+<!-- <img width="1263" height="807" alt="image" src="https://github.com/user-attachments/assets/d118b779-87eb-4097-919c-859ce57da01f" /> -->
 <!-- <img width="1575" height="1009" alt="image" src="https://github.com/user-attachments/assets/bc277120-2ae6-4e6f-a40e-3abc01f9fbf1" /> -->
-<img width="1257" height="807" alt="image" src="https://github.com/user-attachments/assets/4a7eefc8-1777-4450-822e-a66314152388" />
-
-
+<img width="1803" height="1018" alt="image" src="https://github.com/user-attachments/assets/362cb9c2-a945-46fd-86ce-c8f9b4ec6de1" />
+<img width="1667" height="1012" alt="image" src="https://github.com/user-attachments/assets/aca9cea6-649a-4673-b497-a1dd487a8c86" />
+<!-- <img width="1257" height="807" alt="image" src="https://github.com/user-attachments/assets/4a7eefc8-1777-4450-822e-a66314152388" /> -->
 <!-- <img width="1575" height="1008" alt="image" src="https://github.com/user-attachments/assets/c0b6e0e2-d9b8-44bb-b38d-26f416b26b00" /> -->
 
 
