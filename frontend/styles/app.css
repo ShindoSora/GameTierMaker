@@ -2,8 +2,8 @@
 @import url("./base.css?v=20261013-controls");
 @import url("./tier-board.css?v=20261013-tier-morph");
 @import url("./layout.css?v=20261013-controls");
-@import url("./components.css?v=20261018-group-motion");
-@import url("./logs.css?v=20261020-resize-handles");
+@import url("./components.css?v=20261022-group-colors");
+@import url("./logs.css?v=20261022-neutral-rows");
 @import url("./settings.css?v=20261019-control-alignment");
 @import url("./overrides.css?v=20261016-nintendo-sync");
 @import url("./theme-switch.css?v=20261016-sky-switch");
@@ -11,4 +11,5 @@
 @import url("./search-panel.css?v=20261012-search-exit");
 @import url("./browser-preview.css?v=20261020-user-copy");
 @import url("./download-queue.css?v=20261020-download-motion");
-@import url("./refinements.css?v=20261019-toolbar-restored");
+@import url("./refinements.css?v=20261022-group-colors");
+@import url("./library-browser.css?v=20261022-square-with-names");

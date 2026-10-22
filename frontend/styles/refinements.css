@@ -86,14 +86,17 @@
   .storage-cache-grid { grid-template-columns: 1fr; }
 }
 
-/* Keep artwork prominent; platform color is an accent rather than a bright frame. */
+/* Folded rows share the open group's surface, border and title colors. */
 .library-panel { border-radius: 26px; }
-.library-group-item { margin-bottom: 8px; background: var(--bg-primary); box-shadow: none; }
-.library-group-item .collapse-header { min-height: 42px; font-size: 13px; border-left-width: 3px; padding: 10px 12px; }
-.library-group-item:hover { box-shadow: none; background: var(--bg-secondary); }
-.library-group-overlay { --group-border-color: color-mix(in srgb, var(--group-accent, #94a3b8) 32%, var(--border-strong)); }
+.library-group-item, .library-group-overlay {
+  --group-border-color: color-mix(in srgb, var(--group-accent, #94a3b8) 32%, var(--border-strong));
+  --group-header-bg: color-mix(in srgb, var(--group-accent, #94a3b8) 15%, var(--panel-solid));
+}
+.library-group-item { margin-bottom: 8px; background: var(--group-header-bg); box-shadow: none; }
+.library-group-item .collapse-header { min-height: 42px; font-size: 13px; padding: 10px 15px; }
+.library-group-item:hover { box-shadow: none; background: color-mix(in srgb, var(--group-header-bg) 92%, var(--text-primary)); }
 .library-group-overlay-surface, [data-theme="light"] .library-group-overlay-surface { background: var(--panel-solid); }
-.library-group-overlay-header { background: color-mix(in srgb, var(--group-accent, #94a3b8) 15%, var(--panel-solid)); }
+.library-group-overlay-header { background: var(--group-header-bg); }
 .group-island-overlay .library-group-overlay-grid { background: transparent; }
 .tier-row-container { --tier-radius: 20px; --tier-surface: #191c24; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
 .unsorted-drop-zone { border: 1px dashed var(--border-strong); background: var(--bg-primary); }

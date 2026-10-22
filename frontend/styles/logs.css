@@ -65,11 +65,11 @@
 .log-empty { display: grid; place-items: center; min-height: 180px; padding: 24px; color: var(--text-secondary); text-align: center; font-family: inherit; }
 .log-row {
   display: grid; grid-template-columns: 58px 52px minmax(0,1fr); gap: 7px;
-  padding: 5px 10px; border-left: 2px solid transparent;
+  padding: 5px 10px 5px 12px;
 }
 .log-row:hover { background: var(--surface); }
-.log-row.WARNING { background: rgba(240,160,96,0.06); border-left-color: var(--warning); }
-.log-row.ERROR, .log-row.CRITICAL { background: rgba(240,96,96,0.08); border-left-color: var(--danger); }
+.log-row.WARNING { background: rgba(240,160,96,0.06); }
+.log-row.ERROR, .log-row.CRITICAL { background: rgba(240,96,96,0.08); }
 .log-time { color: var(--text-secondary); }
 .log-level { font-weight: 700; color: var(--accent-hover); }
 .log-row.DEBUG .log-level { color: var(--text-secondary); }

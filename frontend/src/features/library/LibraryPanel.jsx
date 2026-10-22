@@ -3,7 +3,7 @@
 
   const { useEffect, useLayoutEffect, useRef, useState } = React;
   const { t } = window.GameTierI18n;
-  const { SearchResults, LibraryGroup, useSearchPresentation, getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } = window.GameTierApp;
+  const { SearchResults, LibraryGroup, getLibraryGroupName, getLibraryGroupColor, getLibraryGroupDetails, getLibraryGroupPlatform, useSearchPresentation, getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } = window.GameTierApp;
   function LibraryPanel({
     preferencesModel,
     searchModel,
@@ -14,6 +14,7 @@
   }) {
     const { libraryOpen, setLibraryOpen, libraryWidth, setLibraryWidth } = preferencesModel;
     const [phase, setPhase] = useState(libraryOpen ? 'open' : 'closed');
+    const [draggedOverGroup, setDraggedOverGroup] = useState(null);
     const toggleRef = useRef(null);
     const panelRef = useRef(null);
     const contentRef = useRef(null);
@@ -109,10 +110,6 @@
       handleCreateGroup,
       libraryGroupsRef,
       activeGroupData,
-      closingLibraryGroup,
-      handleCloseLibraryGroup,
-      handleLibraryGroupCloseComplete,
-      activeLibraryGroup,
       handleDeleteGroup,
       handleClearGroup,
       handleDropToGroup,
@@ -123,6 +120,39 @@
     const searchPresentation = useSearchPresentation({ data: searchResults, loading: searchLoading,
       minimized: searchMinimized, source: searchSource });
     const searchCoversGroups = !!(searchResults || searchLoading) && !searchMinimized;
+    const displayedGroup = activeGroupData || libraryGroups[0] || null;
+    const sourceGroups = libraryGroups.filter(group => ['default_upload', 'local_upload'].includes(group.id));
+    const accountGroups = libraryGroups.filter(group => getLibraryGroupPlatform(group));
+    const customGroups = libraryGroups.filter(group => !sourceGroups.includes(group) && !accountGroups.includes(group));
+    useLayoutEffect(() => {
+      if (libraryOpen) libraryGroupsRef.current?.querySelector('[aria-pressed="true"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [displayedGroup?.id, libraryWidth, libraryOpen]);
+    const renderGroupNavigation = (group) => {
+      const details = getLibraryGroupDetails(group);
+      const selected = displayedGroup?.id === group.id;
+      return (
+        <button key={group.id} type="button"
+          className={`library-group-nav-item ${selected ? 'selected' : ''} ${draggedOverGroup === group.id ? 'drag-over' : ''}`}
+          data-library-nav-id={group.id} aria-pressed={selected} title={getLibraryGroupName(group)}
+          style={{ '--group-accent': getLibraryGroupColor(group) }}
+          onClick={(event) => handleOpenLibraryGroup(event, group)}
+          onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); setDraggedOverGroup(group.id); }}
+          onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDraggedOverGroup(null); }}
+          onDrop={(event) => {
+            event.preventDefault(); event.stopPropagation(); setDraggedOverGroup(null);
+            const imageId = event.dataTransfer.getData('text/plain');
+            if (imageId) handleDropToGroup(imageId, group.id);
+          }}>
+          <span className="library-group-nav-label">
+            <i className="library-group-dot" aria-hidden="true" />
+            {details.platform || details.name}
+          </span>
+          {details.platform && <span className="library-group-nav-account">{details.name}</span>}
+          <span className="library-group-nav-count">{t('library.coverCount', { count: group.image_ids.length })}</span>
+        </button>
+      );
+    };
     return (
       <>
         <div className="library-toggle-rail">
@@ -242,8 +272,24 @@
                   {t('library.upload')}
                 </button>
               </div>
+
+            </div>
+            {searchPresentation.visible && <div ref={searchDockRef} className="search-panel-dock" aria-hidden="true" />}
+          </div>
+          <div className="library-groups-area library-workspace"
+            aria-hidden={searchCoversGroups} inert={searchCoversGroups ? '' : undefined}>
+            <nav className="library-navigation" aria-label={t('library.navigation')}>
+              <div className="library-navigation-scroll" ref={libraryGroupsRef}>
+                <div className="library-navigation-label">{t('library.resources')}</div>
+                {sourceGroups.map(renderGroupNavigation)}
+                {accountGroups.length > 0 && <div className="library-navigation-label library-navigation-divider">{t('library.platformAccounts')}</div>}
+                {accountGroups.map(renderGroupNavigation)}
+                {customGroups.length > 0 && <div className="library-navigation-label library-navigation-divider">{t('library.collections')}</div>}
+                {customGroups.map(renderGroupNavigation)}
+              </div>
+              <div className="library-navigation-footer">
               <button
-                className="btn btn-sm library-create-group"
+                className="btn btn-sm library-create-group library-nav-create"
                 onClick={handleCreateGroup}
                 title={t('library.newGroup')}
               >
@@ -263,40 +309,13 @@
                 </svg>
                 {t('library.newGroup')}
               </button>
-            </div>
-            {searchPresentation.visible && <div ref={searchDockRef} className="search-panel-dock" aria-hidden="true" />}
-          </div>
-          <div className="library-groups-area">
-          <div className={`library-groups-scroll ${activeGroupData ? 'covered' : ''} ${searchCoversGroups ? 'search-covered' : ''}`} ref={libraryGroupsRef}
-            style={{ opacity: activeGroupData ? 0 : 1 }}
-            aria-hidden={!!activeGroupData || searchCoversGroups} inert={activeGroupData || searchCoversGroups ? '' : undefined}>
-            {libraryGroups.map((g) => (
-              <LibraryGroup
-                key={g.id} group={g} images={g.image_ids} onOpen={handleOpenLibraryGroup}
-                onDelete={handleDeleteGroup} onClear={handleClearGroup} onDropToGroup={handleDropToGroup}
-                onDeleteImage={handleDeleteImage} onAddToUnassigned={handleAddToUnassigned} imagesMeta={imagesMeta}
-              />
-            ))}
-          </div>
-            {activeGroupData && (
-              <LibraryGroup
-                key={`active-${activeGroupData.id}`}
-                group={activeGroupData}
-                images={activeGroupData.image_ids}
-                expandedView
-                closing={closingLibraryGroup}
-                onClose={handleCloseLibraryGroup}
-                onCloseComplete={handleLibraryGroupCloseComplete}
-                originRect={activeLibraryGroup.originRect}
-                sourceListRef={libraryGroupsRef}
-                onDelete={handleDeleteGroup}
-                onClear={handleClearGroup}
-                onDropToGroup={handleDropToGroup}
-                onDeleteImage={handleDeleteImage}
-                onAddToUnassigned={handleAddToUnassigned}
-                imagesMeta={imagesMeta}
-              />
-            )}
+              </div>
+            </nav>
+            {displayedGroup ? <LibraryGroup key={displayedGroup.id} group={displayedGroup}
+              onDelete={handleDeleteGroup} onClear={handleClearGroup}
+              onDropToGroup={handleDropToGroup} onDeleteImage={handleDeleteImage}
+              onAddToUnassigned={handleAddToUnassigned} imagesMeta={imagesMeta} />
+              : <div className="library-browser-empty"><strong>{t('library.noGroups')}</strong></div>}
           </div>
           {/* One persistent shell grows from the header dock over the groups below. */}
           <SearchResults
@@ -306,7 +325,7 @@
             onRestore={() => setSearchMinimized(false)} hostRef={contentRef} dockRef={searchDockRef}
             minimized={searchPresentation.minimized} exiting={searchPresentation.exiting}
             onExitComplete={searchPresentation.onExitComplete}
-            covered={!!activeGroupData || !libraryOpen || phase !== 'open'}
+            covered={!libraryOpen || phase !== 'open'}
           />
           </div>
         </div>

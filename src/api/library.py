@@ -31,6 +31,8 @@ def build_library_payload(mgr, template_id: str | None = None):
                 "remote_failed": meta.remote_failed,
                 "path": meta.path,
                 "source_group_id": source_group_id,
+                "game_name": meta.game_name,
+                "original_name": meta.original_name,
                 "display_mode": "cover_top",
             }
         return {"groups": groups, "images_meta": images_meta}

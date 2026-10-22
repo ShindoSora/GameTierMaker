@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { useState, useRef } = React;
+  const { useState, useRef, useEffect } = React;
   const { t, getErrorMessage } = window.GameTierI18n;
   const { fetchAPI, showToast, prepareGroupImagesDissolve, prepareGroupPanelDissolve } = window.GameTierApp;
   function useLibraryActions({
@@ -13,11 +13,8 @@
     libraryGroups,
   }) {
     const [activeLibraryGroup, setActiveLibraryGroup] = useState(null);
-    const [closingLibraryGroup, setClosingLibraryGroup] = useState(false);
     const libraryGroupsRef = useRef(null);
-    const originElementRef = useRef(null);
     const activeGroupRef = useRef(null);
-    const closingGroupRef = useRef(false);
     const [showPresetsModal, setShowPresetsModal] = useState(false);
     const [presetsList, setPresetsList] = useState([]);
     const groupOperationsRef = useRef(new Set());
@@ -36,9 +33,7 @@
         await loadCurrentTemplate(targetTemplateId);
         if (activeGroupRef.current?.id === groupId) {
           activeGroupRef.current = null;
-          closingGroupRef.current = false;
           setActiveLibraryGroup(null);
-          setClosingLibraryGroup(false);
         }
       } catch (error) {
         showToast(getErrorMessage(error, 'errors.deleteFailed'), 'error');
@@ -47,58 +42,14 @@
         groupOperationsRef.current.delete(groupId);
       }
     };
-    const handleOpenLibraryGroup = (event, group) => {
-      const host = libraryGroupsRef.current;
-      if (!host) return;
-      const hostRect = host.getBoundingClientRect();
-      const element = event.currentTarget.closest?.('.library-group-item') || event.currentTarget;
-      const groupRect = element.getBoundingClientRect();
-      originElementRef.current = element;
-      closingGroupRef.current = false;
-      setClosingLibraryGroup(false);
-      const active = {
-        id: group.id,
-        originRect: {
-          left: groupRect.left - hostRect.left, top: groupRect.top - hostRect.top,
-          width: groupRect.width, height: groupRect.height,
-          radius: Number.parseFloat(getComputedStyle(element).borderRadius) || 12,
-        },
-      };
+    useEffect(() => {
+      activeGroupRef.current = null;
+      setActiveLibraryGroup(null);
+    }, [currentId]);
+    const handleOpenLibraryGroup = (_event, group) => {
+      const active = { id: group.id };
       activeGroupRef.current = active;
       setActiveLibraryGroup(active);
-    };
-    const handleCloseLibraryGroup = () => {
-      if (!activeGroupRef.current || closingGroupRef.current) return;
-      const host = libraryGroupsRef.current;
-      const element = originElementRef.current;
-      if (host && element?.isConnected) {
-        const hostRect = host.getBoundingClientRect(), rect = element.getBoundingClientRect();
-        activeGroupRef.current = { ...activeGroupRef.current, originRect: {
-          left: rect.left - hostRect.left, top: rect.top - hostRect.top,
-          width: rect.width, height: rect.height,
-          radius: Number.parseFloat(getComputedStyle(element).borderRadius) || 12,
-        } };
-        setActiveLibraryGroup(activeGroupRef.current);
-      }
-      closingGroupRef.current = true;
-      setClosingLibraryGroup(true);
-    };
-    const handleLibraryGroupCloseComplete = (groupId) => {
-      if (closingGroupRef.current && activeGroupRef.current?.id === groupId) {
-        activeGroupRef.current = null;
-        closingGroupRef.current = false;
-        setActiveLibraryGroup(null);
-        setClosingLibraryGroup(false);
-      }
-    };
-    const handleToggleGroup = async (groupId, currentState) => {
-      await fetchAPI(
-        `/library/groups/${groupId}/expand?expanded=${!currentState}&template_id=${encodeURIComponent(currentId)}`,
-        {
-          method: 'PUT',
-        }
-      );
-      await loadCurrentTemplate(currentId);
     };
     const handleDropToGroup = async (imageId, groupId, index = -1) => {
       try {
@@ -197,15 +148,12 @@
       : null;
     return {
       activeLibraryGroup,
-      closingLibraryGroup,
       libraryGroupsRef,
       showPresetsModal,
       setShowPresetsModal,
       presetsList,
       handleDeleteGroup,
       handleOpenLibraryGroup,
-      handleCloseLibraryGroup,
-      handleLibraryGroupCloseComplete,
       handleDropToGroup,
       handleImportFromTemplate,
       handleCreateGroup,
