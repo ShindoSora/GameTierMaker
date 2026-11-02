@@ -5,11 +5,12 @@
 @import url("./components.css?v=20261022-group-colors");
 @import url("./logs.css?v=20261022-neutral-rows");
 @import url("./settings.css?v=20261019-control-alignment");
-@import url("./overrides.css?v=20261016-nintendo-sync");
+@import url("./overrides.css?v=20261025-material-settings");
 @import url("./theme-switch.css?v=20261016-sky-switch");
-@import url("./glass.css?v=20261018-rounded-slider");
-@import url("./search-panel.css?v=20261012-search-exit");
+@import url("./glass.css?v=20261028-liquid-rim-6");
+@import url("./search-panel.css?v=20261025-material-settings");
 @import url("./browser-preview.css?v=20261020-user-copy");
-@import url("./download-queue.css?v=20261020-download-motion");
+@import url("./download-queue.css?v=20261023-centered-controls");
 @import url("./refinements.css?v=20261022-group-colors");
-@import url("./library-browser.css?v=20261022-square-with-names");
+@import url("./library-browser.css?v=20261023-sliding-groups");
+@import url("./template-transition.css?v=20261028-blackhole-dust");

@@ -11,7 +11,7 @@ from typing import Any
 
 from src.core.credential_store import CredentialStoreError, protect_secret, unprotect_secret
 from src.core.config_handler import ConfigHandler
-from src.core.errors import CredentialExpiredError, RemoteServiceError
+from src.core.errors import CredentialExpiredError, RemoteResponseError, RemoteServiceError
 from src.core.json_store import (
     JsonStoreError,
     atomic_write_json,
@@ -138,6 +138,7 @@ class NintendoStore:
             record = {
                 **old,
                 "display_name": str(profile.get("nickname") or "Nintendo Account"),
+                "avatarfull": str(profile.get("avatarfull") or ""),
                 "country": str(profile.get("country") or ""),
                 "language": str(profile.get("language") or "en-US"),
                 "credential_ref": credential_ref,
@@ -169,6 +170,25 @@ class NintendoStore:
             safe.pop("credential_ref", None)
             safe.pop("credential_version", None)
             return {"account_id": account_id, **safe}
+
+    @classmethod
+    def update_profile(cls, account_id: str, profile: dict[str, Any]) -> None:
+        """Refresh public profile data without replacing credentials or sync state."""
+        if str(profile.get("id") or "") != str(account_id):
+            raise RemoteResponseError("Nintendo 账号资料不匹配", code="nintendo_response_invalid")
+        with cls._lock:
+            current = cls._read_accounts()
+            account = current["accounts"].get(str(account_id))
+            if not isinstance(account, dict):
+                return
+            account.update({
+                "display_name": str(profile.get("nickname") or "Nintendo Account"),
+                "avatarfull": str(profile.get("avatarfull") or ""),
+                "country": str(profile.get("country") or ""),
+                "language": str(profile.get("language") or "en-US"),
+                "updated_at": _now(),
+            })
+            atomic_write_json(cls._accounts_path(), current, validator=validate_json_object)
 
     @classmethod
     def mark_needs_reauth(cls, account_id: str, message: str = "") -> None:

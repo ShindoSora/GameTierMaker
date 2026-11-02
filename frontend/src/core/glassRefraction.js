@@ -3,7 +3,7 @@
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const GLASS_OPTICAL_SURFACES = '.settings-panel.island-panel, .log-sidebar.island-panel, '
-    + '.tier-color-dialog, .search-panel, '
+    + '.tier-color-dialog, .material-dialog, .search-panel, '
     + '.search-source-pill, .glass-slider-lens';
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   let filterSequence = 0;
@@ -42,17 +42,19 @@
       ny: side === 2 ? -1 : side === 3 ? 1 : 0};
   }
 
-  // A smooth lens shoulder: both displacement and its slope vanish at the band boundaries.
+  // A liquid rim: the bend peaks just inside the edge (t = .2) and eases off slowly towards the
+  // centre, like the curved border of a drop. It is zero exactly at the edge, so no seam shows.
   function glassEdgeProfile(depth, band) {
     const t = clamp(depth / Math.max(1, band), 0, 1);
-    return 16 * t * t * (1 - t) * (1 - t);
+    return Math.sqrt(t) * (1 - t) * (1 - t) / .2862;
   }
 
   function buildGlassDisplacementMap(width, height, radii, scaleX = 1, scaleY = 1, bulged = false) {
     const sx = Math.max(.01, scaleX), sy = Math.max(.01, scaleY);
     const visualWidth = width * sx, visualHeight = height * sy;
-    const band = clamp(Math.min(visualWidth, visualHeight) * .22, 5, 22);
-    const strength = clamp(band * .62, 2.5, 13);
+    // Large panels get a wide, strong rim; small lenses (slider knob, pills) keep their old size.
+    const band = clamp(Math.min(visualWidth, visualHeight) * .22, 5, 46);
+    const strength = clamp(band * .66, 2.5, 30);
     const resolution = Math.min(1, Math.sqrt(100000 / Math.max(1, visualWidth * visualHeight)));
     const mapWidth = Math.max(4, Math.ceil(visualWidth * resolution));
     const mapHeight = Math.max(4, Math.ceil(visualHeight * resolution));

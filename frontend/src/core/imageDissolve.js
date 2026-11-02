@@ -1,10 +1,46 @@
 (() => {
   'use strict';
 
+  function imageDissolveTarget(element) {
+    return element.closest('.library-cover-card') || element;
+  }
+
+  function paintCoverName(context, label, targetRect) {
+    const text = label.firstChild;
+    if (!text || text.nodeType !== 3) return;
+    const style = getComputedStyle(label), bounds = label.getBoundingClientRect();
+    const range = document.createRange(), lines = [];
+    let offset = 0;
+    // DOM ranges retain the browser's wrapping, including CJK and mixed-language names.
+    for (const character of text.textContent) {
+      range.setStart(text, offset);
+      offset += character.length;
+      range.setEnd(text, offset);
+      const rect = range.getBoundingClientRect();
+      if (!rect.height || rect.bottom > bounds.bottom + .5) continue;
+      let line = lines[lines.length - 1];
+      if (!line || Math.abs(line.top - rect.top) > 1) {
+        line = { text: '', left: rect.left, top: rect.top, height: rect.height };
+        lines.push(line);
+      }
+      line.text += character;
+    }
+    context.save();
+    context.beginPath();
+    context.rect(bounds.left - targetRect.left, bounds.top - targetRect.top, bounds.width, bounds.height);
+    context.clip();
+    context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    context.fillStyle = style.color;
+    context.textBaseline = 'middle';
+    lines.forEach(line => context.fillText(line.text,
+      line.left - targetRect.left, line.top - targetRect.top + line.height / 2));
+    context.restore();
+  }
+
   // Snapshot before DELETE: a successful global deletion also removes the image file.
   function prepareImageElementsDissolve(elements) {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return null;
-    const targets = elements
+    const targets = [...new Set(elements.map(imageDissolveTarget))]
       .map(element => ({ element, rect: element.getBoundingClientRect() }))
       .filter(({element, rect}) => getComputedStyle(element).visibility !== 'hidden'
         && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0
@@ -16,21 +52,28 @@
       bitmap.height = Math.ceil(rect.height);
       const context = bitmap.getContext('2d');
       if (!context) return null;
-      const radius = parseFloat(getComputedStyle(element).borderRadius) || 8;
+      const cover = element.matches('.drag-image') ? element : element.querySelector('.drag-image');
+      const coverRect = cover.getBoundingClientRect();
+      const left = coverRect.left - rect.left, top = coverRect.top - rect.top;
+      const radius = parseFloat(getComputedStyle(cover).borderRadius) || 8;
+      context.save();
       context.beginPath();
-      if (context.roundRect) context.roundRect(0, 0, rect.width, rect.height, radius);
-      else context.rect(0, 0, rect.width, rect.height);
+      if (context.roundRect) context.roundRect(left, top, coverRect.width, coverRect.height, radius);
+      else context.rect(left, top, coverRect.width, coverRect.height);
       context.clip();
       const image = element.querySelector('img');
       if (image?.complete && image.naturalWidth) {
-        const scale = Math.max(rect.width / image.naturalWidth, rect.height / image.naturalHeight);
+        const scale = Math.max(coverRect.width / image.naturalWidth, coverRect.height / image.naturalHeight);
         const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
         // Covers use object-fit:cover and object-position:center top.
-        context.drawImage(image, (rect.width - width) / 2, 0, width, height);
+        context.drawImage(image, left + (coverRect.width - width) / 2, top, width, height);
       } else {
         context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#5b9cf5';
-        context.fillRect(0, 0, rect.width, rect.height);
+        context.fillRect(left, top, coverRect.width, coverRect.height);
       }
+      context.restore();
+      const label = element.querySelector('.library-cover-name');
+      if (label) paintCoverName(context, label, rect);
       const pieces = [];
       const budget = Math.max(25, Math.floor(4500 / targets.length));
       const size = Math.max(3, Math.ceil(Math.sqrt(rect.width * rect.height / budget)));
@@ -125,7 +168,7 @@
     const panel = findGroupPanel(groupId);
     if (!panel) return null;
     // Only visible covers in this group's panel, not the whole board or other groups.
-    const covers = [...panel.querySelectorAll('.drag-image[data-image-id]')].filter(element => {
+    const covers = [...panel.querySelectorAll('.drag-image[data-image-id]')].map(imageDissolveTarget).filter(element => {
       const rect = element.getBoundingClientRect();
       const grid = element.closest('.library-group-overlay-grid');
       const clip = (grid || panel).getBoundingClientRect();

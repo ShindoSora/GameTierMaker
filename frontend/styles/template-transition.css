@@ -1,0 +1,55 @@
+/* This viewport sits below the toolbar; only template pages move. */
+.template-viewport { position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; isolation: isolate; }
+.template-page { position: absolute; inset: 0; display: flex; min-height: 0; min-width: 0; overflow: hidden; background: var(--bg-page); }
+.template-page-current { z-index: 2; }
+.template-page-outgoing { z-index: 1; pointer-events: none; }
+.template-parallax-content { display: flex; flex: 1; min-height: 0; min-width: 0; transform-origin: center; }
+.template-viewport[aria-busy="true"] .template-page-current { pointer-events: none; }
+.template-viewport .tier-list-area { min-width: 0; min-height: 0; overscroll-behavior: contain; }
+/* Only the board is pulled into the well; the toolbar and library stay put. */
+.template-delete-outgoing { z-index: 2; transform-origin: center; will-change: transform, opacity; }
+.template-delete-incoming { z-index: 3; visibility: hidden; opacity: 0; transform-origin: center; will-change: transform, opacity; }
+/* The board becomes a planet that the hole tears into particles. The particle canvas sits
+   below the hole; the front canvas sits above it for matter, disk glow and jets in front of it. */
+.template-devour { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; contain: strict; }
+.template-devour-shade {
+  position: absolute; border-radius: 50%; pointer-events: none; opacity: 0;
+  will-change: transform, opacity; backface-visibility: hidden;
+  box-shadow: inset 0 0 var(--rim) #ffc89a40, 0 0 var(--rim) #ff9a5a38;
+}
+.template-devour-gas, .template-devour-front { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.template-devour-front { z-index: 6; }
+.template-blackhole-anchor { position: absolute; inset: 0; display: grid; place-items: center; z-index: 5; pointer-events: none; overflow: hidden; }
+.template-blackhole { position: relative; width: 260px; height: 260px; opacity: 0; will-change: transform, opacity; }
+.template-blackhole-halo { position: absolute; inset: -70px; border-radius: 50%; background: radial-gradient(ellipse, #ffbd6930 0%, #cf79491c 28%, #0004 46%, transparent 69%); }
+.template-blackhole-core {
+  position: absolute; inset: 78px; border-radius: 50%; background: #030305;
+  box-shadow: 0 0 2px 2px #fff3d9, 0 0 9px 3px #ffc888b3, 0 0 24px 3px #ec8c443b, inset 0 0 12px #000;
+}
+.template-blackhole-orbit, .template-blackhole-front { position: absolute; inset: 16px -34px; transform: rotate(-18deg) scaleY(.32); border-radius: 50%; }
+.template-blackhole-orbit > div, .template-blackhole-front > div {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 4%, #c86c3740 17%, #ffbb6c 38%, #fff3cf 49%, #d48a48 62%, #70381755 82%, transparent 98%);
+  mask-image: radial-gradient(ellipse, transparent 45%, #000 49%, #000 52%, #0006 58%, transparent 70%);
+  animation: template-accretion-spin 1.9s linear infinite;
+}
+.template-blackhole-front { clip-path: inset(50% 0 0); }
+.template-blackhole-dust {
+  position: absolute; left: 50%; top: 50%; width: 3px; height: 2px; border-radius: 50%; background: #ffdbac;
+  opacity: 0; box-shadow: 0 0 4px #ffae6b; animation: template-accretion-dust 1.3s var(--delay) linear infinite;
+}
+.template-delete-retry {
+  position: absolute; left: 50%; top: calc(50% + 125px); transform: translateX(-50%); z-index: 6;
+  text-align: center; padding: 12px 20px; border-radius: 12px; background: var(--bg-page); color: var(--text-primary); max-width: 90%;
+}
+.template-delete-retry p { margin: 0 0 10px; }
+@keyframes template-accretion-spin { to { transform: rotate(360deg); } }
+@keyframes template-accretion-dust {
+  0% { transform: rotate(var(--angle)) translateX(var(--radius)) scaleX(2); opacity: 0; }
+  20% { opacity: .8; }
+  100% { transform: rotate(calc(var(--angle) + 160deg)) translateX(48px) scaleX(.3); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .template-page, .template-parallax-content { will-change: auto !important; }
+  .template-blackhole-dust, .template-blackhole-orbit > div, .template-blackhole-front > div { animation: none; }
+}

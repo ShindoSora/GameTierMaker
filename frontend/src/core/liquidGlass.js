@@ -2,7 +2,7 @@
   'use strict';
 
   const GLASS_SURFACES = '.settings-panel.island-panel, .log-sidebar.island-panel, '
-    + '.tier-color-dialog, .context-menu, .confirm-dialog, .settings-nav, .glass-range-surface, .search-panel, .search-source-pill';
+    + '.tier-color-dialog, .context-menu, .confirm-dialog, .material-dialog, .settings-nav, .glass-range-surface, .search-panel, .search-source-pill';
   const LIGHT_PROPERTIES = ['--glass-light-x', '--glass-light-y', '--glass-light-angle', '--glass-presence'];
 
   function getGlassLight(bounds, clientX, clientY) {
@@ -90,7 +90,7 @@
   }
 
   function LiquidGlassEffects({enabled}) {
-    React.useEffect(() => enabled ? createLiquidGlassController() : undefined, [enabled]);
+    React.useLayoutEffect(() => enabled ? createLiquidGlassController() : undefined, [enabled]);
     return null;
   }
 

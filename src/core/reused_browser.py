@@ -174,6 +174,14 @@ class ReusedBrowserSession:
         self.frame = None
         self.metadata = {"type": "state", "engine": engine_name, "host": "", "canBack": False, "canForward": False}
         self.viewport = {"width": 1000, "height": 700}
+        # Pixel density of the viewer's screen, so frames are rendered sharp on high-DPI
+        # displays instead of being stretched from 1x. Capped to keep frames reasonably small.
+        self.scale = 1.0
+        # The screencast stream always delivers frames at CSS size, whatever the pixel density.
+        # On high-DPI screens it is only used to notice changes; a sharp screenshot is sent instead.
+        self.sharp_request = None
+        self.sharp_task = None
+        self.last_stream_frame = None
         self.visible = False
         self.process = None
         self.profile_dir = None
@@ -298,7 +306,10 @@ class ReusedBrowserSession:
             str(self.executable), "--headless=new", "--remote-debugging-address=127.0.0.1",
             "--remote-debugging-port=0", f"--user-data-dir={self.profile_dir}",
             "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-            "--disable-background-mode", "--window-size=1000,700", "about:blank",
+            "--disable-background-mode", "--window-size=1000,700",
+            # Ignore Windows display scaling; the viewer's pixel density is applied per frame
+            # through Emulation.setDeviceMetricsOverride, so it must not be scaled twice.
+            "--force-device-scale-factor=1", "about:blank",
         ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         port_file = self.profile_dir / "DevToolsActivePort"
@@ -393,6 +404,7 @@ class ReusedBrowserSession:
             with contextlib.suppress(Exception):
                 await old.send("Page.stopScreencast")
         self.active_id = target_id
+        self.last_stream_frame = None
         client = self.pages[target_id]
         await self._resize(client)
         if self.visible:
@@ -400,11 +412,44 @@ class ReusedBrowserSession:
         await self._history(client)
 
     async def _resize(self, client):
-        await client.send("Emulation.setDeviceMetricsOverride", {**self.viewport, "deviceScaleFactor": 1, "mobile": False})
+        self.last_stream_frame = None
+        await client.send("Emulation.setDeviceMetricsOverride",
+                          {**self.viewport, "deviceScaleFactor": self.scale, "mobile": False})
+
+    def _frame_allowed(self, client):
+        return (client.target_id == self.active_id and self.visible
+                and self.urls.get(client.target_id) not in {None, "", "about:blank"}
+                and not is_sony_credential_document(self.urls.get(client.target_id))
+                and client.target_id not in self.sensitive_targets)
+
+    def _request_sharp_frame(self, client, size):
+        # Only the latest request matters; one screenshot runs at a time.
+        self.sharp_request = (client, size)
+        if self.sharp_task is None or self.sharp_task.done():
+            self.sharp_task = asyncio.create_task(self._sharp_frames())
+
+    async def _sharp_frames(self):
+        while self.sharp_request and not self.closing:
+            client, size = self.sharp_request
+            self.sharp_request = None
+            if not self._frame_allowed(client):
+                continue
+            try:
+                shot = await client.send("Page.captureScreenshot",
+                                         {"format": "jpeg", "quality": 90, "optimizeForSpeed": True})
+            except Exception:
+                continue
+            # The page may have navigated to a protected page while the screenshot was taken.
+            if self._frame_allowed(client) and isinstance(shot, dict) and shot.get("data"):
+                self._publish({"type": "frame", "data": shot["data"], **size})
 
     async def _screencast(self, client):
-        await client.send("Page.startScreencast", {"format": "jpeg", "quality": 78, "maxWidth": 1600,
-                                                  "maxHeight": 1200, "everyNthFrame": 1})
+        # Frames are captured at device pixels; quality 90 keeps small text free of JPEG noise.
+        await client.send("Page.startScreencast", {
+            "format": "jpeg", "quality": 90,
+            "maxWidth": min(3840, math.ceil(self.viewport["width"] * self.scale)),
+            "maxHeight": min(2400, math.ceil(self.viewport["height"] * self.scale)),
+            "everyNthFrame": 1})
 
     async def _history(self, client):
         history = await client.send("Page.getNavigationHistory")
@@ -416,14 +461,19 @@ class ReusedBrowserSession:
         if self.closing:
             return
         if method == "Page.screencastFrame":
-            if (client.target_id == self.active_id and self.visible
-                    and self.urls.get(client.target_id) not in {None, "", "about:blank"}
-                    and not is_sony_credential_document(self.urls.get(client.target_id))
-                    and client.target_id not in self.sensitive_targets):
+            if self._frame_allowed(client):
                 meta = params.get("metadata", {})
-                self._publish({"type": "frame", "data": params["data"],
-                               "width": round(meta.get("deviceWidth", self.viewport["width"])),
-                               "height": round(meta.get("deviceHeight", self.viewport["height"]))})
+                size = {"width": round(meta.get("deviceWidth", self.viewport["width"])),
+                        "height": round(meta.get("deviceHeight", self.viewport["height"]))}
+                if self.scale <= 1.01:
+                    self._publish({"type": "frame", "data": params["data"], **size})
+                else:
+                    # Taking a screenshot itself produces another stream frame, so only
+                    # frames whose picture actually changed ask for a new sharp screenshot.
+                    digest = hash(params["data"])
+                    if digest != self.last_stream_frame:
+                        self.last_stream_frame = digest
+                        self._request_sharp_frame(client, size)
             await client.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
         elif method == "Network.responseReceived" and self.spec.platform == "psn":
             response = params.get("response", {})
@@ -560,7 +610,15 @@ class ReusedBrowserSession:
             width, height = message.get("width"), message.get("height")
             if all(isinstance(value, (float, int)) and math.isfinite(value) for value in (width, height)):
                 self.viewport = {"width": max(200, min(1920, round(width))), "height": max(150, min(1200, round(height)))}
+                scale = message.get("scale", 1)
+                if isinstance(scale, (float, int)) and not isinstance(scale, bool) and math.isfinite(scale):
+                    self.scale = round(max(1.0, min(2.0, float(scale))), 3)
                 await self._resize(client)
+                if self.visible:
+                    # The frame size limit depends on the viewport and scale, so restart the stream.
+                    with contextlib.suppress(Exception):
+                        await client.send("Page.stopScreencast")
+                    await self._screencast(client)
         elif kind in {"back", "forward"}:
             history = await client.send("Page.getNavigationHistory")
             index = history["currentIndex"] + (-1 if kind == "back" else 1)

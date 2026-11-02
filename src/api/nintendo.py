@@ -21,6 +21,7 @@ from src.core.errors import (
     CredentialExpiredError,
     InvalidInputError,
     RemoteResponseError,
+    RemoteServiceError,
 )
 from src.core.nintendo.models import NintendoTitle, is_demo_title
 from src.core.nintendo.nintendo_client import NintendoClient
@@ -269,6 +270,11 @@ def sync_nintendo_account(
         except CredentialExpiredError as exc:
             NintendoStore.mark_needs_reauth(account_id, exc.message)
             raise
+        try:
+            NintendoStore.update_profile(account_id, client.get_profile())
+        except (CredentialExpiredError, RemoteServiceError) as exc:
+            # An optional avatar/profile lookup must not discard fetched play history.
+            logger.warning("Nintendo 账号资料刷新失败，继续同步游玩记录: %s", exc.code)
         title_dicts = [_title_dict(title) for title in titles]
         snapshot_id = uuid.uuid4().hex
         preview_id = uuid.uuid4().hex

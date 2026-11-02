@@ -5,8 +5,9 @@
   const { TierRow, TierMotionSlot, UnassignedMotion, useTierPresence,
     storeDragEvent, calculateInsertIndex, dragState, DraggableImage } =
     window.GameTierApp;
-  function TierBoard({ templatesModel, tierBoardModel, imagesModel }) {
-    const { tiers, imagesMeta, unassigned, currentId } = templatesModel;
+  function TierBoard({ templatesModel, tierBoardModel, imagesModel, inactive = false }) {
+    const { tiers, imagesMeta, unassigned } = templatesModel;
+    const currentId = templatesModel.contentTemplateId || templatesModel.currentId;
     const { entries, complete } = useTierPresence(currentId, tiers);
     const {
       handleDropToTier,
@@ -24,7 +25,7 @@
     } = tierBoardModel;
     const { handleDeleteImage } = imagesModel;
     return (
-      <div id="tier-list-area" className="tier-list-area">
+      <div id={inactive ? undefined : 'tier-list-area'} className="tier-list-area">
         {entries.map(({ tier, phase }) => (
           <TierMotionSlot key={`${currentId}:${tier.id}`} tier={tier} phase={phase} onComplete={complete}>
             <TierRow

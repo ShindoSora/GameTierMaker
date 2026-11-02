@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { useRef, useState, useEffect } = React;
+  const { useRef, useState, useEffect, useLayoutEffect } = React;
   const {
     readUiPreferences,
     hasRefreshNotice,
@@ -102,7 +102,7 @@
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
     }, [theme]);
-    useEffect(() => {
+    useLayoutEffect(() => {
       const root = document.documentElement;
       root.setAttribute('data-liquid-glass', liquidGlassEnabled ? 'on' : 'off');
       root.style.setProperty('--liquid-glass-alpha', String(1 - liquidGlassTransparency / 100));

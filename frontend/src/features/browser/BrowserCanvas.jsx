@@ -28,7 +28,9 @@
         if (!latest.current.visible) { send({ type: 'visibility', visible: false }); return; }
         const rect = stageRef.current?.getBoundingClientRect();
         if (!rect) return;
-        send({ type: 'resize', width: Math.round(rect.width), height: Math.round(rect.height) });
+        // The remote page is rendered at this screen's pixel density so it isn't stretched from 1x.
+        const scale = Math.round(Math.min(2, Math.max(1, window.devicePixelRatio || 1)) * 1000) / 1000;
+        send({ type: 'resize', width: Math.round(rect.width), height: Math.round(rect.height), scale });
         send({ type: 'visibility', visible: latest.current.visible });
       };
       sendViewRef.current = viewport;
@@ -52,13 +54,16 @@
             const image = new Image();
             image.onload = () => {
               if (disposed || sequence !== drawing || !canvasRef.current) return;
+              // Page size in CSS pixels, used to map clicks back onto the remote page.
               const width = Math.max(1, Math.min(1920, message.width));
               const height = Math.max(1, Math.min(1200, message.height));
+              // The image itself arrives at device pixels; draw it 1:1 so it stays sharp.
+              const pixelWidth = image.naturalWidth || width, pixelHeight = image.naturalHeight || height;
               const canvas = canvasRef.current;
-              if (canvas.width !== width) canvas.width = width;
-              if (canvas.height !== height) canvas.height = height;
+              if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+              if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
               frameSize.current = { width, height };
-              canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+              canvas.getContext('2d').drawImage(image, 0, 0, pixelWidth, pixelHeight);
               setHasFrame(true);
             };
             image.src = `data:image/jpeg;base64,${message.data}`;
@@ -75,8 +80,18 @@
       open();
       const observer = new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(viewport, 120); });
       if (stageRef.current) observer.observe(stageRef.current);
+      // Moving the window to a screen with different scaling changes the pixel density.
+      let densityQuery = null;
+      const watchDensity = () => {
+        densityQuery?.removeEventListener?.('change', densityChanged);
+        densityQuery = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`) || null;
+        densityQuery?.addEventListener?.('change', densityChanged);
+      };
+      function densityChanged() { watchDensity(); viewport(); }
+      watchDensity();
       return () => {
         disposed = true; drawing++;
+        densityQuery?.removeEventListener?.('change', densityChanged);
         clearTimeout(reconnect); clearTimeout(resizeTimer); observer.disconnect();
         send({ type: 'visibility', visible: false });
         socketRef.current?.close();

@@ -8,12 +8,12 @@
 .download-queue-content { display:flex; flex-direction:column; flex:1; min-height:0; }
 .download-queue-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 18px 10px; }
 .download-queue-header h2 { margin:0; font-size:15px; font-weight:650; }
-.download-queue-header .btn { width:30px; height:30px; padding:0; }
+.download-queue-header .btn { width:30px; height:30px; padding:0; flex-shrink:0; justify-content:center; align-items:center; }
 .download-queue-tabs { position:relative; isolation:isolate; display:flex; flex-shrink:0; gap:5px; margin:0 18px 8px; padding:4px; border-radius:12px; background:var(--control-bg); }
 .download-queue-tab-pill { position:absolute; left:0; top:0; visibility:hidden; z-index:0; pointer-events:none; border-radius:12px; background:var(--control-hover); box-shadow:0 1px 4px #0002; }
 .download-queue-tabs button { position:relative; z-index:1; flex:1; display:flex; justify-content:center; align-items:center; gap:8px; border:0; padding:9px 8px; background:transparent; color:var(--text-secondary); border-radius:9px; font:inherit; font-size:12px; cursor:pointer; transition:color 160ms ease; }
 .download-queue-tabs button[aria-selected="true"] { color:var(--text-primary); }
-.download-queue-tabs button > span { min-width:18px; font-size:10px; font-variant-numeric:tabular-nums; opacity:.8; }
+.download-queue-tabs button > span { flex:0 0 auto; text-align:center; font-size:10px; font-variant-numeric:tabular-nums; opacity:.8; }
 .download-queue-tabs button:focus-visible, .download-queue-header button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 .download-queue-list { min-height:0; overflow:auto; overscroll-behavior:contain; padding:0 18px 8px; }
 .download-queue-item { padding:15px 0; border-bottom:1px solid var(--divider); }

@@ -1,0 +1,45 @@
+/* This first-paint surface deliberately has no dependency on app.css or React. */
+#startup-splash {
+  position: fixed; inset: 0; z-index: 2147483000; overflow: hidden;
+  background: #0c0e14; color: #edf0f7; isolation: isolate;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  transition: opacity 380ms ease, visibility 380ms;
+}
+#startup-splash[data-theme="light"] { background: #eef1f6; color: #202735; }
+#startup-splash[data-leaving] { opacity: 0; visibility: hidden; pointer-events: none; }
+.startup-aura { position: absolute; inset: 0; opacity: .8;
+  background: radial-gradient(ellipse 32% 34% at 44% 44%, #467be515, transparent 100%),
+    radial-gradient(ellipse 25% 28% at 57% 52%, #ec5a7510, transparent 100%); }
+.startup-orbit { position: absolute; left: 50%; top: 44%; width: 246px; height: 246px;
+  margin: -123px; border: 1px solid #91a9e412; border-radius: 50%; }
+.startup-logo { position: absolute; left: 50%; top: 44%; width: 68px; height: 68px;
+  margin: -34px; display: grid; place-items: center; border-radius: 21px;
+  border: 1px solid color-mix(in srgb, var(--platform-color) 48%, transparent);
+  background: color-mix(in srgb, var(--platform-color) 17%, #111621);
+  box-shadow: 0 0 32px color-mix(in srgb, var(--platform-color) 16%, transparent), inset 0 1px 0 #ffffff15;
+  will-change: transform, opacity;
+}
+.startup-logo img { width: 36px; height: 36px; filter: invert(1); }
+.startup-trail, .startup-spark { position: absolute; left: 50%; top: 44%;
+  width: 5px; height: 5px; margin: -2.5px; border-radius: 50%;
+  background: var(--platform-color); box-shadow: 0 0 10px var(--platform-color);
+  pointer-events: none; will-change: transform, opacity; }
+.startup-flash { position: absolute; left: 50%; top: 44%; width: 100px; height: 100px;
+  margin: -50px; border: 1px solid #b4d2ff70; border-radius: 50%; opacity: 0; }
+.startup-copy { position: absolute; top: calc(44% + 154px); left: 20px; right: 20px; text-align: center; }
+/* No visible title or text while loading; the status stays readable by screen readers
+   and only shows when loading fails, to explain the retry buttons. */
+.startup-copy p { margin: 10px 0 0; font-size: 12px; line-height: 1.8; letter-spacing: .12em; opacity: .55; }
+#startup-splash:not([data-failed]) .startup-copy p {
+  position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.startup-actions { position: absolute; top: calc(44% + 242px); width: 100%; text-align: center; }
+.startup-actions[hidden], .startup-actions button[hidden] { display: none; }
+.startup-actions button { border: 1px solid #8098b644; border-radius: 9px; padding: 9px 18px;
+  background: #8098b615; color: inherit; font: inherit; font-size: 13px; margin: 0 5px; cursor: pointer; }
+.startup-actions button:hover { background: #8098b630; }
+.startup-actions button:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  #startup-splash { transition-duration: 100ms; }
+  .startup-trail, .startup-spark, .startup-flash { display: none; }
+}

@@ -4,7 +4,7 @@
   const { useState, useRef, useEffect } = React;
   const { t } = window.GameTierI18n;
   const { getTemplateDisplayName } = window.GameTierApp;
-  function TemplateSelector({ templates, currentId, onSelect }) {
+  function TemplateSelector({ templates, currentId, onSelect, disabled = false }) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef(null);
     const selectedTemplate =
@@ -26,6 +26,7 @@
     }, [open]);
     const chooseTemplate = (templateId) => {
       setOpen(false);
+      if (disabled) return;
       if (templateId !== currentId) onSelect(templateId);
     };
     return (
@@ -33,6 +34,7 @@
         <button
           type="button"
           className="template-select-trigger"
+          disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-label={t('template.select')}
@@ -56,7 +58,7 @@
             <path d="M6 9l6 6 6-6" />
           </svg>
         </button>
-        {open && (
+        {open && !disabled && (
           <div className="template-select-menu" role="listbox" aria-label={t('template.select')}>
             {templates.map((template) => {
               const selected = template.id === currentId;

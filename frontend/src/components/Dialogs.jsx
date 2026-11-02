@@ -62,10 +62,18 @@
       document.body
     );
   }
+  function LoadingOverlay({ right = 0 }) {
+    return <div className="busy-overlay" style={{ right }} role="status" aria-live="polite">
+      <div className="busy-panel material-dialog">
+        <div className="loading-spinner" />
+        <span>{t('common.pleaseWait')}</span>
+      </div>
+    </div>;
+  }
   function RefreshOverlay() {
     return (
       <div className="refresh-overlay" role="status" aria-live="polite">
-        <div className="refresh-panel">
+        <div className="refresh-panel material-dialog">
           <div className="loading-spinner" />
           <span>{t('common.refreshing')}</span>
         </div>
@@ -173,6 +181,7 @@
   Object.assign(window.GameTierApp, {
     ConfirmDialog,
     RefreshOverlay,
+    LoadingOverlay,
     InputDialog,
   });
 })();

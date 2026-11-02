@@ -83,6 +83,8 @@
 
     'template.created': '模板已创建',
     'template.select': '选择模板',
+    'template.loadFailed': '接替模板加载失败，请重试',
+    'template.retryLoad': '重新加载模板',
     'template.label': '模板',
     'template.create': '新建模板',
     'template.delete': '删除当前模板',
@@ -122,7 +124,6 @@
     'library.navigation': '图片分组',
     'library.platformAccounts': '平台与账号',
     'library.collections': '我的分组',
-    'library.browser': '封面浏览器',
     'library.coverCount': '{count} 张',
     'library.noGroups': '暂无分组，请新建分组',
     'library.emptyGroup': '暂无封面',
@@ -689,6 +690,8 @@
 
     'template.created': 'Template created',
     'template.select': 'Select template',
+    'template.loadFailed': 'Could not load the next template. Please try again.',
+    'template.retryLoad': 'Reload template',
     'template.label': 'Template',
     'template.create': 'New template',
     'template.delete': 'Delete current template',
@@ -728,7 +731,6 @@
     'library.navigation': 'Image groups',
     'library.platformAccounts': 'Platforms & accounts',
     'library.collections': 'My groups',
-    'library.browser': 'Cover browser',
     'library.coverCount': '{count} covers',
     'library.noGroups': 'No groups yet. Create a group to get started.',
     'library.emptyGroup': 'No covers yet',

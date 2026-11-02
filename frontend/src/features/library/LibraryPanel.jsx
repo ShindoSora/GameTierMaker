@@ -3,7 +3,7 @@
 
   const { useEffect, useLayoutEffect, useRef, useState } = React;
   const { t } = window.GameTierI18n;
-  const { SearchResults, LibraryGroup, getLibraryGroupName, getLibraryGroupColor, getLibraryGroupDetails, getLibraryGroupPlatform, useSearchPresentation, getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } = window.GameTierApp;
+  const { SearchResults, LibraryGroup, getLibraryGroupName, getLibraryGroupColor, getLibraryGroupDetails, getLibraryGroupPlatform, useSearchPresentation, useSlidingPill, getIslandOrigin, ISLAND_DURATION, ISLAND_OPEN_EASING, ISLAND_CLOSE_EASING } = window.GameTierApp;
   function LibraryPanel({
     preferencesModel,
     searchModel,
@@ -19,6 +19,7 @@
     const panelRef = useRef(null);
     const contentRef = useRef(null);
     const searchDockRef = useRef(null);
+    const groupButtonsRef = useRef({});
     const animationRef = useRef(null);
     const contentAnimationRef = useRef(null);
     const previousOpenRef = useRef(libraryOpen);
@@ -117,10 +118,18 @@
     } = libraryModel;
     const { handleAddToUnassigned } = tierBoardModel;
     const { imagesMeta, libraryGroups } = templatesModel;
+    const templatePending = !!templatesModel.templateDeletion || !!templatesModel.creatingTemplate || (templatesModel.contentTemplateId != null
+      && templatesModel.contentTemplateId !== templatesModel.currentId);
     const searchPresentation = useSearchPresentation({ data: searchResults, loading: searchLoading,
       minimized: searchMinimized, source: searchSource });
     const searchCoversGroups = !!(searchResults || searchLoading) && !searchMinimized;
     const displayedGroup = activeGroupData || libraryGroups[0] || null;
+    const navigationPill = useSlidingPill({
+      selectedKey: displayedGroup?.id,
+      layoutKey: `${libraryWidth}:${libraryGroups.map(group => group.id).join('|')}`,
+      visible: libraryOpen && phase === 'open' && !searchCoversGroups && !templatePending && !!displayedGroup,
+      buttonsRef: groupButtonsRef,
+    });
     const sourceGroups = libraryGroups.filter(group => ['default_upload', 'local_upload'].includes(group.id));
     const accountGroups = libraryGroups.filter(group => getLibraryGroupPlatform(group));
     const customGroups = libraryGroups.filter(group => !sourceGroups.includes(group) && !accountGroups.includes(group));
@@ -133,6 +142,7 @@
       const selected = displayedGroup?.id === group.id;
       return (
         <button key={group.id} type="button"
+          ref={node => { if (node) groupButtonsRef.current[group.id] = node; else delete groupButtonsRef.current[group.id]; }}
           className={`library-group-nav-item ${selected ? 'selected' : ''} ${draggedOverGroup === group.id ? 'drag-over' : ''}`}
           data-library-nav-id={group.id} aria-pressed={selected} title={getLibraryGroupName(group)}
           style={{ '--group-accent': getLibraryGroupColor(group) }}
@@ -197,7 +207,7 @@
           aria-hidden={!libraryOpen || phase !== 'open'}
           inert={!libraryOpen || phase !== 'open' ? '' : undefined}
         >
-          <div ref={contentRef} className="library-panel-content">
+          <div ref={contentRef} className="library-panel-content" inert={templatePending ? '' : undefined} aria-busy={templatePending}>
           <div className="library-header">
             <div
               className="library-search-row"
@@ -279,7 +289,12 @@
           <div className="library-groups-area library-workspace"
             aria-hidden={searchCoversGroups} inert={searchCoversGroups ? '' : undefined}>
             <nav className="library-navigation" aria-label={t('library.navigation')}>
-              <div className="library-navigation-scroll" ref={libraryGroupsRef}>
+              <div className="library-navigation-scroll" ref={node => {
+                libraryGroupsRef.current = node;
+                navigationPill.hostRef.current = node;
+              }}>
+                <span ref={navigationPill.pillRef} className="library-group-nav-pill" aria-hidden="true"
+                  style={{ '--group-accent': displayedGroup ? getLibraryGroupColor(displayedGroup) : 'var(--accent)' }} />
                 <div className="library-navigation-label">{t('library.resources')}</div>
                 {sourceGroups.map(renderGroupNavigation)}
                 {accountGroups.length > 0 && <div className="library-navigation-label library-navigation-divider">{t('library.platformAccounts')}</div>}
@@ -325,7 +340,7 @@
             onRestore={() => setSearchMinimized(false)} hostRef={contentRef} dockRef={searchDockRef}
             minimized={searchPresentation.minimized} exiting={searchPresentation.exiting}
             onExitComplete={searchPresentation.onExitComplete}
-            covered={!libraryOpen || phase !== 'open'}
+            covered={templatePending || !libraryOpen || phase !== 'open'}
           />
           </div>
         </div>

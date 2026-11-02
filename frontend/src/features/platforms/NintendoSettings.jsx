@@ -2,7 +2,7 @@
   'use strict';
 
   const { t } = window.GameTierI18n;
-  const { SettingsSectionHeading } = window.GameTierApp;
+  const { SettingsSectionHeading, AccountAvatar } = window.GameTierApp;
   function NintendoSettings({ preferencesModel, nintendoModel, settingsModel }) {
     const { settingsActiveSection } = preferencesModel;
     const {
@@ -71,22 +71,7 @@
           ) : (
             Object.entries(nintendoAccounts).map(([accountId, info]) => (
               <div key={accountId} className="steam-account-row nintendo-account-row">
-                <div
-                  className="avatar-fallback"
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'var(--accent-glow)',
-                    color: 'var(--accent)',
-                    flexShrink: 0,
-                  }}
-                >
-                  N
-                </div>
+                <AccountAvatar src={info.avatarfull || ''} name={info.display_name || accountId} />
                 <div
                   className="name"
                   style={{

@@ -22,15 +22,12 @@
           onClick={() => setShowPresetsModal(false)}
         >
           <div
+            className="presets-dialog material-dialog"
             style={{
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius-xl)',
               width: 420,
               maxHeight: '70vh',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
             }}
             onClick={(e) => e.stopPropagation()}
           >

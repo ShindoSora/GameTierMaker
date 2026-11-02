@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { useEffect, useRef } = React;
+  const { useEffect, useRef, useState } = React;
   const { t } = window.GameTierI18n;
   const {
     useDialogs,
@@ -26,11 +26,13 @@
     useIslandPanel,
     clearRefreshNotice,
     RefreshOverlay,
+    LoadingOverlay,
     ConfirmDialog,
     InputDialog,
     LibraryPanel,
     TopToolbar,
     TierBoard,
+    TemplateTransition,
     LogSidebar,
     SettingsPanel,
     useBrowserPreview,
@@ -41,6 +43,7 @@
     LiquidGlassEffects,
   } = window.GameTierApp;
   function App() {
+    const [startupReady, setStartupReady] = useState(false);
     const browserModel = useBrowserPreview();
     const dialogsModel = useDialogs();
     const busyModel = useBusy();
@@ -174,12 +177,23 @@
           clearRefreshNotice();
           preferencesModel.setRefreshing(false);
         }
+        if (!disposed) setStartupReady(true);
       };
-      initialize();
+      initialize().catch(error => {
+        console.error(error);
+        if (!disposed) window.GameTierStartup?.fail();
+      });
       return () => {
         disposed = true;
       };
     }, []);
+    useEffect(() => {
+      if (startupReady) window.GameTierStartup?.ready();
+    }, [startupReady]);
+    useEffect(() => {
+      // Recovery may need confirmation before loadData can finish.
+      if (dialogsModel.confirmRequest || dialogsModel.inputRequest) window.GameTierStartup?.dismiss();
+    }, [dialogsModel.confirmRequest, dialogsModel.inputRequest]);
     useEffect(() => {
       if (preferencesModel.settingsActiveSection === 'steam_accounts')
         steamModel.loadSteamAccounts();
@@ -210,48 +224,8 @@
         </>
       );
     }
-    const loadingMask = busyModel.loading ? (
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          bottom: 0,
-          right: logsModel.logOpen ? logsModel.logWidth : 0,
-          zIndex: 3500,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'none',
-        }}
-      >
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius-xl)',
-            padding: '32px 48px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 16,
-            boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
-          }}
-        >
-          <div className="loading-spinner" />
-          <span
-            style={{
-              fontSize: 15,
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-            }}
-          >
-            {t('common.pleaseWait')}
-          </span>
-        </div>
-      </div>
-    ) : null;
+    const loadingMask = busyModel.loading
+      ? <LoadingOverlay right={logsModel.logOpen ? logsModel.logWidth : 0} /> : null;
     return (
       <div
         style={{
@@ -293,11 +267,14 @@
             />
 
             {/* Tier List */}
-            <TierBoard
-              templatesModel={templatesModel}
-              tierBoardModel={tierBoardModel}
-              imagesModel={imagesModel}
-            />
+            <TemplateTransition templateId={templatesModel.contentTemplateId || templatesModel.currentId}
+              templates={templatesModel.templates}
+              deletion={templatesModel.templateDeletion}
+              onDeletionComplete={templatesModel.finishTemplateDeletion}
+              onDeletionRetry={templatesModel.retryTemplateDeletion}
+              pending={templatesModel.creatingTemplate || templatesModel.contentTemplateId !== templatesModel.currentId}>
+              <TierBoard templatesModel={templatesModel} tierBoardModel={tierBoardModel} imagesModel={imagesModel} />
+            </TemplateTransition>
           </div>
         </div>
 

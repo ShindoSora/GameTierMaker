@@ -166,7 +166,9 @@ def main(profile):
             control = WebView2()
             properties = CoreWebView2CreationProperties()
             properties.UserDataFolder = str(profile)
-            properties.AdditionalBrowserArguments = "--disable-backgrounding-occluded-windows --disable-renderer-backgrounding"
+            # Display scaling is applied per frame by the viewer, so WebView2 itself renders at 1x.
+            properties.AdditionalBrowserArguments = ("--disable-backgrounding-occluded-windows --disable-renderer-backgrounding"
+                                                     " --force-device-scale-factor=1")
             control.CreationProperties = properties
             control.Dock = DockStyle.Fill
             page = {"id": page_id, "control": control, "session": None, "receivers": [], "ready": False}

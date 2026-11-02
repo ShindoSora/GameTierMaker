@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import secrets
 import time
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 import requests
 
@@ -30,6 +31,44 @@ PLAY_HISTORY_URL = "https://app-api.znej.nintendo.com/api/v2.0/users/me/play_his
 USER_AGENT = "com.nintendo.znej/1.13.0 (Android/7.1.2)"
 REQUEST_TIMEOUT = (10, 30)
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+
+
+def _safe_avatar_url(url: Any) -> str:
+    if not isinstance(url, str) or not url or len(url) > 4096:
+        return ""
+    if any(char in url for char in "{}\\\r\n\t"):
+        return ""
+    try:
+        parsed = urlsplit(url)
+        if (parsed.scheme != "https" or parsed.hostname not in {
+                "cdn.accounts.nintendo.com", "cdn-mii.accounts.nintendo.com"}
+                or parsed.username is not None or parsed.password is not None
+                or parsed.port not in (None, 443) or parsed.fragment):
+            return ""
+    except ValueError:
+        return ""
+    return url
+
+
+def _mii_avatar_url(mii: Any) -> str:
+    """Expand Nintendo Account's Mii image template into a small face PNG."""
+    if not isinstance(mii, dict):
+        return ""
+    url = mii.get("imageUri")
+    if not isinstance(url, str) or not url:
+        template = mii.get("imageUriTemplate")
+        if not isinstance(template, str) or not template or len(template) > 4096:
+            return ""
+        values = {key: mii.get(key) for key in ("imageOrigin", "id", "etag")}
+        if any(not isinstance(value, str) or not value for value in values.values()):
+            return ""
+        url = template.replace("{imageOrigin}", values["imageOrigin"])
+        for key in ("id", "etag"):
+            url = url.replace("{/" + key + "}", "/" + quote(values[key], safe=""))
+        url = url.replace("{format}", "png")
+        url = re.sub(r"\{\?[^{}]*\}", "", url)
+        url += ("&" if "?" in url else "?") + urlencode({"type": "face", "width": 128})
+    return _safe_avatar_url(url)
 
 
 @dataclass(frozen=True)
@@ -266,6 +305,7 @@ class NintendoClient:
         return {
             "id": str(payload["id"]),
             "nickname": str(payload.get("nickname") or "Nintendo Account"),
+            "avatarfull": _safe_avatar_url(payload.get("iconUri")) or _mii_avatar_url(payload.get("mii")),
             "language": str(payload.get("language") or self.locale),
             "country": str(payload.get("country") or ""),
         }

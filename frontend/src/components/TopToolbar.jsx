@@ -66,7 +66,7 @@
     };
   }
 
-  function TemplateRename({ templateName, renameMode, setRenameMode, handleRenameTemplate }) {
+  function TemplateRename({ templateName, renameMode, setRenameMode, handleRenameTemplate, disabled = false }) {
     const [draft, setDraft] = useState(templateName);
     const [saving, setSaving] = useState(false);
     const rootRef = useRef(null), triggerRef = useRef(null), fieldsRef = useRef(null);
@@ -103,13 +103,14 @@
     };
     return (
       <div ref={rootRef} className="template-rename" data-open={renameMode ? 'true' : 'false'}
+        inert={disabled ? '' : undefined} aria-disabled={disabled || undefined}
         onKeyDown={(event) => {
           if (event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || composingRef.current) return;
           if (event.key === 'Escape' && renameMode) { event.preventDefault(); event.stopPropagation(); cancel(); }
         }}>
         <button ref={triggerRef} type="button" className="btn btn-xs rename-trigger"
           aria-expanded={renameMode} aria-hidden={renameMode || undefined} tabIndex={renameMode ? -1 : 0}
-          disabled={renameMode} onClick={() => { setDraft(templateName); setRenameMode(true); }}>
+          disabled={disabled || renameMode} onClick={() => { setDraft(templateName); setRenameMode(true); }}>
           {t('actions.rename')}
         </button>
         <div ref={fieldsRef} className="rename-fields" aria-hidden={!renameMode} inert={renameMode ? undefined : ''}>
@@ -157,6 +158,10 @@
     const { handleExport, exporting } = imagesModel;
     const { toggleTheme, theme, handleGlobalRefresh } = preferencesModel;
     const { backfill } = backfillModel;
+    const deleting = !!templatesModel.templateDeletion;
+    const creating = !!templatesModel.creatingTemplate;
+    const switchPending = deleting || creating || (templatesModel.contentTemplateId != null
+      && templatesModel.contentTemplateId !== currentId);
     const backfillProcessed = backfill ? backfill.ok + backfill.fail : 0;
     const backfillTotal = backfill ? backfillProcessed + Math.max(0, backfill.remaining) + (backfill.retryPending || 0) : 0;
     const backfillPercent = Math.round(backfillProcessed / Math.max(1, backfillTotal) * 100);
@@ -167,10 +172,12 @@
       <div className="top-toolbar">
         {/* Template group */}
         <div className="toolbar-group template-selector-group toolbar-template-actions">
-          <TemplateSelector templates={templates} currentId={currentId} onSelect={switchTemplate} />
+          <TemplateSelector templates={templates} currentId={currentId} onSelect={switchTemplate} disabled={deleting || creating || undefined} />
           <div className="toolbar-separator" />
           <button
             className="btn btn-xs template-action-button template-create"
+            disabled={switchPending}
+            aria-busy={creating}
             onClick={handleCreateTemplate}
             title={t('template.create')}
           >
@@ -178,6 +185,7 @@
           </button>
           <button
             className="btn btn-xs template-action-button template-remove"
+            disabled={switchPending}
             onClick={handleDeleteTemplate}
             title={t('template.delete')}
           >
@@ -189,12 +197,13 @@
         <div className="toolbar-group toolbar-primary-actions">
           <span className="toolbar-caption">{t('template.label')}</span>
           <TemplateRename key={currentId} templateName={templateName} renameMode={renameMode}
+            disabled={switchPending}
             setRenameMode={setRenameMode} handleRenameTemplate={handleRenameTemplate} />
           <div className="toolbar-separator" />
-          <button className="btn btn-xs toolbar-add-tier" onClick={handleAddTier}>
+          <button className="btn btn-xs toolbar-add-tier" onClick={handleAddTier} disabled={switchPending}>
             {t('tier.add')}
           </button>
-          <button className="btn btn-xs btn-primary toolbar-export" onClick={handleExport} disabled={exporting}>
+          <button className="btn btn-xs btn-primary toolbar-export" onClick={handleExport} disabled={exporting || switchPending}>
             {t('actions.export')}
           </button>
           <ThemeSwitch theme={theme} toggleTheme={toggleTheme} />
@@ -222,7 +231,8 @@
           </button>
         </div>
 
-        <div className="toolbar-spacer" />
+        <div id="toolbar-notifications" className="toolbar-spacer toolbar-toast-region"
+          ref={window.GameTierApp.attachToastHost} role="status" aria-live="polite" aria-atomic="true" />
 
         {/* 后台回填进度指示器 */}
         {backfill && (

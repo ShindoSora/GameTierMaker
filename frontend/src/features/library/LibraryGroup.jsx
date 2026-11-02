@@ -6,7 +6,7 @@
   const { storeDragEvent, calculateInsertIndex, dragState, clearDragEvent, DraggableImage } = window.GameTierApp;
   // Colors identify the source, independent of group order or account nickname.
   const accountPlatforms = [
-    { idPrefix: 'psn_import_', label: 'PS', aliases: ['PS', 'PSN', 'PlayStation'], legacy: 'PSN', color: '#00439C' },
+    { idPrefix: 'psn_import_', label: 'PlayStation', aliases: ['PS', 'PSN', 'PlayStation'], legacy: 'PSN', color: '#00439C' },
     { idPrefix: 'xbox:', label: 'Xbox', aliases: ['Xbox'], legacy: 'Xbox', color: '#107C10' },
     { idPrefix: 'nintendo:', label: 'Nintendo', aliases: ['Nintendo'], legacy: 'Nintendo', color: '#E60012' },
     { idPrefix: 'steam_import_', label: 'Steam', aliases: ['Steam'], legacy: 'Steam', color: '#66C0F4' },
@@ -15,7 +15,7 @@
     return accountPlatforms.find((platform) => group.id.startsWith(platform.idPrefix));
   }
   function getLibraryGroupColor(group) {
-    if (group.id === 'default_upload') return '#A78BFA';
+    if (group.id === 'default_upload') return '#94A3B8';
     if (group.id === 'local_upload') return '#F5B942';
     return getLibraryGroupPlatform(group)?.color || '#94A3B8';
   }
@@ -90,7 +90,6 @@
         aria-label={getLibraryGroupName(group)}>
         <header className="library-browser-header">
           <div className="library-browser-heading">
-            <span className="library-browser-eyebrow">{details.platform || t('library.browser')}</span>
             <h2>{details.name}</h2>
             <span className="library-browser-count">{t('library.coverCount', { count: group.image_ids.length })}</span>
           </div>
