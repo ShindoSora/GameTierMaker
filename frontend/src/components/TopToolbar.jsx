@@ -2,8 +2,8 @@
   'use strict';
 
   const { t } = window.GameTierI18n;
-  const { TemplateSelector, ThemeSwitch } = window.GameTierApp;
-  const { useState, useRef, useLayoutEffect } = React;
+  const { TemplateSelector, ThemeSwitch, getTemplateDisplayName } = window.GameTierApp;
+  const { useState, useRef, useLayoutEffect, useEffect } = React;
 
   function createRenameMorph(root, trigger, fields) {
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -168,8 +168,64 @@
     const backfillActive = backfill && !backfill.error && backfill.remaining !== 0;
     const { handleOpenSettings } = settingsModel;
     const { logOpen, setLogOpen, unreadLogErrors } = logsModel;
+    // Collapsed, the toolbar is a compact Dynamic Island; a click expands it to the full bar.
+    const [expanded, setExpanded] = useState(false);
+    const rootRef = useRef(null), islandRef = useRef(null), collapseRef = useRef(null);
+    const previousRectRef = useRef(null), morphRef = useRef(null), restoreFocusRef = useRef(false);
+    const toggleExpanded = (next) => {
+      if (next === expanded) return;
+      previousRectRef.current = rootRef.current?.getBoundingClientRect() || null;
+      restoreFocusRef.current = true;
+      setExpanded(next);
+    };
+    useLayoutEffect(() => {
+      const root = rootRef.current, from = previousRectRef.current;
+      previousRectRef.current = null;
+      morphRef.current?.cancel();
+      morphRef.current = null;
+      if (restoreFocusRef.current) {
+        restoreFocusRef.current = false;
+        (expanded ? collapseRef.current : islandRef.current)?.focus({ preventScroll: true });
+      }
+      if (!root?.animate || !from || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+      const to = root.getBoundingClientRect();
+      if (!from.width || !to.width || Math.abs(from.width - to.width) < 2) return;
+      // Grow or shrink from the centre, clipping the contents while the shape changes.
+      const frame = (rect, radius) => ({
+        width: `${rect.width}px`, height: `${rect.height}px`, minHeight: '0px', borderRadius: radius,
+        alignSelf: 'center', marginLeft: '0px', marginRight: '0px', maxWidth: 'none',
+        flexWrap: 'nowrap', overflow: 'hidden',
+      });
+      const fromRadius = `${Math.min(from.height / 2, expanded ? 999 : 32)}px`;
+      const toRadius = getComputedStyle(root).borderRadius;
+      const animation = root.animate([frame(from, fromRadius), frame(to, toRadius)], {
+        duration: expanded ? 520 : 420,
+        easing: expanded ? 'cubic-bezier(0.22, 1.2, 0.36, 1)' : 'cubic-bezier(0.3, 0.9, 0.3, 1)',
+      });
+      morphRef.current = animation;
+      animation.onfinish = animation.oncancel = () => {
+        if (morphRef.current === animation) morphRef.current = null;
+      };
+    }, [expanded]);
+    useEffect(() => () => morphRef.current?.cancel(), []);
     return (
-      <div className="top-toolbar">
+      <div ref={rootRef} className={`top-toolbar ${expanded ? 'expanded' : 'collapsed'}`}
+        data-island-state={expanded ? 'expanded' : 'collapsed'}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || !expanded || event.defaultPrevented || renameMode) return;
+          if (event.target.closest?.('[aria-expanded="true"]')) return; // An open menu owns Escape.
+          toggleExpanded(false);
+        }}>
+        <button ref={islandRef} type="button" className="island-pill" aria-expanded={expanded}
+          title={t('toolbar.expand')} aria-label={t('toolbar.expand')} onClick={() => toggleExpanded(true)}>
+          <span className="island-pill-dot" aria-hidden="true" />
+          <span className="island-pill-name">{getTemplateDisplayName(templateName) || t('app.title')}</span>
+          {unreadLogErrors > 0 && <span className="log-unread-badge island-pill-badge">{Math.min(unreadLogErrors, 99)}</span>}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
         {/* Template group */}
         <div className="toolbar-group template-selector-group toolbar-template-actions">
           <TemplateSelector templates={templates} currentId={currentId} onSelect={switchTemplate} disabled={deleting || creating || undefined} />
@@ -416,6 +472,13 @@
           {!logOpen && unreadLogErrors > 0 && (
             <span className="log-unread-badge">{Math.min(unreadLogErrors, 99)}</span>
           )}
+        </button>
+        <button ref={collapseRef} type="button" className="sidebar-toggle island-collapse"
+          title={t('toolbar.collapse')} aria-label={t('toolbar.collapse')} onClick={() => toggleExpanded(false)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 15 6-6 6 6" />
+          </svg>
         </button>
       </div>
     );

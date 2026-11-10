@@ -1,14 +1,26 @@
-/* Dynamic Island toolbar: a centred black capsule that hugs its content and
-   grows when a notice or the download indicator appears. Loaded last so it
-   overrides the full-width toolbar rules in overrides.css. */
-.top-toolbar {
+/* Dynamic Island toolbar.
+   Collapsed: a centred black capsule showing the template name (plus notices
+   and the download indicator). Clicking it expands to the regular full-width
+   toolbar styled in overrides.css. Loaded last so it overrides those rules. */
+
+.top-toolbar { transition: background-color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease; }
+
+/* What each state shows. */
+.top-toolbar.expanded > .island-pill { display: none; }
+.top-toolbar.collapsed > .toolbar-group:not(.download-queue-trigger),
+.top-toolbar.collapsed > .settings-toolbar-button,
+.top-toolbar.collapsed > .log-toolbar-button,
+.top-toolbar.collapsed > .island-collapse { display: none; }
+
+/* Collapsed capsule. */
+.top-toolbar.collapsed {
   align-self: center;
   width: fit-content;
   max-width: calc(100% - 24px);
-  min-height: 48px;
+  min-height: 40px;
   margin: 10px auto 2px;
-  padding: 5px 8px;
-  gap: 2px;
+  padding: 4px 6px;
+  gap: 4px;
   flex-wrap: nowrap;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
@@ -18,95 +30,84 @@
     0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 8px 24px rgba(0, 0, 0, 0.42),
     0 2px 6px rgba(0, 0, 0, 0.3);
-  transition: box-shadow 0.35s ease, border-color 0.35s ease;
 }
-.top-toolbar:hover,
-.top-toolbar:focus-within {
-  border-color: rgba(255, 255, 255, 0.14);
+.top-toolbar.collapsed:hover,
+.top-toolbar.collapsed:focus-within {
+  border-color: rgba(255, 255, 255, 0.16);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.05) inset,
     0 12px 34px rgba(0, 0, 0, 0.5),
     0 2px 8px rgba(0, 0, 0, 0.34);
 }
 
-/* The island is black in both themes, so its contents always use the dark palette. */
-[data-theme="light"] .top-toolbar {
+/* The capsule is black in both themes, so its contents use the dark palette. */
+[data-theme="light"] .top-toolbar.collapsed {
   --surface: rgba(255, 255, 255, 0.08);
   --surface-hover: rgba(255, 255, 255, 0.14);
   --border: rgba(255, 255, 255, 0.06);
   --border-strong: rgba(255, 255, 255, 0.12);
-  --divider: rgba(255, 255, 255, 0.2);
-  --divider-strong: rgba(255, 255, 255, 0.3);
   --bg-tertiary: rgba(255, 255, 255, 0.09);
   --text-primary: #edf0f7;
   --text-secondary: #a2aabc;
   --accent: #8ab4ff;
-  --accent-hover: #b4cfff;
-  --accent-glow: rgba(113, 160, 245, 0.16);
-  --action: #3269d1;
-  --action-hover: #386fd4;
-  --control-bg: #1a1e29;
-  --control-hover: #252c3a;
-  --menu-bg: #1b202c;
   --danger: #ff939c;
   --success: #77d6a1;
   --warning: #e9b568;
   color: var(--text-primary);
 }
 
-/* Inner groups melt into the island instead of sitting in their own boxes. */
-.top-toolbar .toolbar-group {
-  padding: 2px;
-  gap: 2px;
+.island-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-width: 132px; max-width: min(360px, 60vw); height: 32px;
+  padding: 0 12px 0 14px;
+  border: 0; border-radius: 999px;
+  background: transparent; color: #edf0f7;
+  font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.island-pill:hover { background: rgba(255, 255, 255, 0.1); }
+.island-pill:active { transform: scale(0.97); }
+.island-pill:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+.island-pill-dot {
+  flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%;
+  background: #8ab4ff; box-shadow: 0 0 8px rgba(138, 180, 255, 0.7);
+}
+.island-pill-name { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; }
+.island-pill svg { flex: 0 0 auto; opacity: 0.7; }
+.island-pill-badge { position: static; flex: 0 0 auto; }
+
+.top-toolbar.collapsed .download-queue-trigger {
   border-color: transparent;
   border-radius: 999px;
-  background: transparent;
-  backdrop-filter: none;
-}
-.top-toolbar .toolbar-group.toolbar-primary-actions { border-color: transparent; }
-.top-toolbar > .toolbar-group + .toolbar-group { margin-left: 2px; }
-.top-toolbar .toolbar-group .btn,
-.top-toolbar .toolbar-group .input,
-.top-toolbar .template-select-trigger,
-.top-toolbar .settings-toolbar-button,
-.top-toolbar .log-toolbar-button {
-  border-radius: 999px;
-}
-.top-toolbar .toolbar-separator { background: rgba(255, 255, 255, 0.12); }
-.top-toolbar .settings-toolbar-button,
-.top-toolbar .log-toolbar-button {
-  margin-left: 2px;
-  border-color: transparent;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-}
-.top-toolbar .log-toolbar-button.active { background: var(--accent); color: #fff; }
-.top-toolbar .download-queue-trigger {
-  border-color: transparent;
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* Notices: the island stays compact and springs wider only while one is shown. */
-.top-toolbar .toolbar-toast-region {
+/* Collapsed notices: the capsule springs wider only while one is shown. */
+.top-toolbar.collapsed .toolbar-toast-region {
   flex: 0 0 auto;
   width: 0;
   min-width: 0;
-  min-height: 36px;
+  min-height: 32px;
   overflow: hidden;
   transition: width 0.5s cubic-bezier(0.34, 1.3, 0.64, 1);
 }
-.top-toolbar .toolbar-toast-region:has(.toast) { width: min(420px, 34vw); }
-.top-toolbar .toolbar-toast-region .toast {
+.top-toolbar.collapsed .toolbar-toast-region:has(.toast) { width: min(420px, 40vw); }
+.top-toolbar.collapsed .toolbar-toast-region .toast {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
 
-@media (max-width: 900px) {
-  .top-toolbar { flex-wrap: wrap; justify-content: center; border-radius: 28px; }
-  .top-toolbar .toolbar-toast-region:has(.toast) { width: 100%; }
+/* Expanded bar: only the collapse button is new. */
+.top-toolbar .island-collapse { margin-left: 2px; }
+
+@media (max-width: 760px) {
+  .top-toolbar.collapsed { flex-wrap: wrap; justify-content: center; border-radius: 24px; }
+  .top-toolbar.collapsed .toolbar-toast-region:has(.toast) { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .top-toolbar,
-  .top-toolbar .toolbar-toast-region { transition: none; }
+  .top-toolbar.collapsed .toolbar-toast-region,
+  .island-pill { transition: none; }
 }
