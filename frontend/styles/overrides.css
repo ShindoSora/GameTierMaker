@@ -16,8 +16,6 @@
 .top-toolbar .toolbar-group .input { min-height:32px; }
 .top-toolbar .toolbar-group .btn { min-height:32px; }
 .toolbar-group.toolbar-primary-actions { border-color:var(--border); }
-.toolbar-group.toolbar-primary-actions .btn-success { background:var(--action); color:#fff; }
-.toolbar-group.toolbar-primary-actions .btn-success:hover { background:var(--action-hover); }
 .toolbar-template-actions .template-create { color:var(--text-primary); }
 .toolbar-template-actions .template-remove { color:var(--text-secondary); }
 .toolbar-template-actions .template-remove:hover { color:var(--danger); background:rgba(240,96,96,0.10); }
@@ -144,21 +142,6 @@
 }
 
 /* Steam import progress */
-.steam-progress-overlay {
-  position: fixed; inset: 0; z-index: 3500;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.65); backdrop-filter: none;
-}
-.steam-progress-panel {
-  background: rgba(20,20,40,0.95); backdrop-filter: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: var(--radius-xl); padding: 32px 40px;
-  display: flex; flex-direction: column; align-items: center; gap: 16px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6); min-width: 260px;
-}
-.steam-progress-ring { transform: rotate(-90deg); }
-.steam-progress-ring circle { transition: stroke-dashoffset 0.3s ease; }
-.steam-progress-text { font-size: 28px; font-weight: 700; color: var(--text-primary); }
 
 /* Steam accounts list */
 .nintendo-account-row.steam-account-row { flex-wrap: wrap; }

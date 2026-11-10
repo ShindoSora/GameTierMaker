@@ -111,16 +111,6 @@ class ConfigHandler:
         )
         return True,self.client_id,token
 
-    def get_bangumi_user_agent(self):
-        data = read_json_with_backup(
-            self.config_path,
-            validator=validate_json_object,
-            default={},
-            use_default_when_missing=True,
-        )
-        self.bangumi_user_agent = self.deep_get(data, "bangumi_user_agent") or ""
-        return self.bangumi_user_agent
-
     def get_steam_key(self):
         data = read_json_with_backup(
             self.config_path,

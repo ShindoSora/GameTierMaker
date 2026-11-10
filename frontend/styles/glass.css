@@ -205,7 +205,6 @@
 .glass-switch input:checked + .glass-switch-track { background: var(--action); }
 .glass-switch input:checked + .glass-switch-track::after { transform: translateX(20px); }
 .glass-switch input:focus-visible + .glass-switch-track { outline: 2px solid var(--accent); outline-offset: 4px; }
-.glass-help { margin: 8px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.75; }
 .appearance-slider-section { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border); }
 .glass-transparency-heading { font-size: 13px; font-weight: 600; }
 .glass-transparency-heading output {
@@ -269,7 +268,6 @@
 }
 #glass-transparency:focus-visible + .glass-range-thumb { filter: drop-shadow(0 0 3px var(--accent)); }
 .glass-range-labels { display: flex; justify-content: space-between; padding: 0 1px; color: var(--text-secondary); font-size: 11px; }
-.appearance-slider-section > .glass-help { margin-top: 18px; }
 .glass-range-surface[data-disabled="true"] .glass-slider-control { opacity: .45; }
 #glass-transparency:disabled { cursor: not-allowed; }
 [data-liquid-glass="off"] .glass-slider-lens { background: #dce2eb; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -298,7 +296,7 @@
 :root[data-liquid-glass="off"] :is(.settings-panel.island-panel, .log-sidebar.island-panel,
   .tier-color-dialog, .context-menu, .confirm-dialog, .material-dialog, .settings-nav,
   .search-panel, .search-source-pill, .busy-panel, .refresh-panel, .presets-dialog,
-  .steam-progress-panel, .glass-slider-lens) {
+  .glass-slider-lens) {
   background: var(--glass-solid-bg, var(--panel-solid));
   border-color: var(--border-strong); box-shadow: none; text-shadow: none;
   -webkit-backdrop-filter: none; backdrop-filter: none;
@@ -307,9 +305,9 @@
 :root[data-liquid-glass="off"] :is(.settings-panel.island-panel, .log-sidebar.island-panel,
   .tier-color-dialog, .context-menu, .confirm-dialog, .material-dialog, .settings-nav,
   .search-panel, .search-source-pill, .busy-panel, .refresh-panel, .presets-dialog,
-  .steam-progress-panel, .glass-slider-lens)::before,
+  .glass-slider-lens)::before,
 :root[data-liquid-glass="off"] :is(.settings-panel.island-panel, .log-sidebar.island-panel,
   .tier-color-dialog, .context-menu, .confirm-dialog, .material-dialog, .settings-nav,
   .search-panel, .search-source-pill, .busy-panel, .refresh-panel, .presets-dialog,
-  .steam-progress-panel, .glass-slider-lens)::after { content: none; display: none; animation: none; }
+  .glass-slider-lens)::after { content: none; display: none; animation: none; }
 :root[data-liquid-glass="off"] .glass-thumb-shine { display: none; }

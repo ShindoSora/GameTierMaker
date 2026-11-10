@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import httpx
 
-from .common import make_item, object_or_empty
+from .common import make_item
 from src.core.errors import (
     CredentialMissingError,
     RemoteResponseError,

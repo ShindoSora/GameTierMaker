@@ -4,14 +4,29 @@
   const { useState, useRef, useEffect } = React;
   const { t } = window.GameTierI18n;
   const { fetchAPI, localSessionReady, API, showToast } = window.GameTierApp;
+  // Storage can be blocked; the log panel must still work for the session.
+  const readStored = (key) => {
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  };
+  const writeStored = (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      /* Keep the in-memory value only. */
+    }
+  };
   function useLiveLogs({ confirmAction }) {
-    const [logOpen, setLogOpen] = useState(() => localStorage.getItem('log-panel-open') === 'true');
+    const [logOpen, setLogOpen] = useState(() => readStored('log-panel-open') === 'true');
     const [logWidth, setLogWidth] = useState(() => {
-      const saved = Number(localStorage.getItem('log-panel-width'));
+      const saved = Number(readStored('log-panel-width'));
       return Number.isFinite(saved) && saved >= 280 ? Math.min(saved, 640) : 340;
     });
     const [logSource, setLogSource] = useState(() =>
-      localStorage.getItem('log-panel-source') === 'console' ? 'console' : 'application'
+      readStored('log-panel-source') === 'console' ? 'console' : 'application'
     );
     const [entriesBySource, setEntriesBySource] = useState({ application: [], console: [] });
     const [connections, setConnections] = useState({ application: 'connecting', console: 'connecting' });
@@ -27,15 +42,15 @@
       console: { lastId: 0, sessionId: '' },
     });
     useEffect(() => {
-      localStorage.setItem('log-panel-source', logSource);
+      writeStored('log-panel-source', logSource);
     }, [logSource]);
     useEffect(() => {
       logOpenRef.current = logOpen;
-      localStorage.setItem('log-panel-open', String(logOpen));
+      writeStored('log-panel-open', String(logOpen));
       if (logOpen) setUnreadLogErrors(0);
     }, [logOpen]);
     useEffect(() => {
-      localStorage.setItem('log-panel-width', String(logWidth));
+      writeStored('log-panel-width', String(logWidth));
     }, [logWidth]);
     useEffect(() => {
       const openLogPanel = () => setLogOpen(true);

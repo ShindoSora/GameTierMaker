@@ -88,7 +88,6 @@
   white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 16px;
 }
 .library-panel.compact .search-result-tab { padding: 0 6px; font-size: 11px; }
-.library-groups-scroll.search-covered { visibility: hidden; pointer-events: none; }
 .search-panel-content-clip {
   position: absolute; z-index: 1; top: 52px; bottom: 0; left: 0; right: 0;
   overflow: hidden; border-radius: 0 0 var(--search-radius) var(--search-radius);

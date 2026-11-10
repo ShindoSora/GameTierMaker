@@ -4,7 +4,6 @@
 import json
 import asyncio
 import contextlib
-import os
 import threading
 import time
 import uuid
@@ -25,7 +24,6 @@ from src.core.config_handler import (
 )
 from src.core.steam.steam_client import SteamInformation
 from src.api.deps import get_manager
-from src.core.models import ImageGroup
 from src.core.library_groups import format_account_group_name
 from src.core.errors import (
     AccountNotFoundError,
@@ -263,10 +261,6 @@ class SteamGridDBSettingsRequest(BaseModel):
     steamgriddb_api_key: str | None = None
 
 
-class SteamJumpRequest(BaseModel):
-    game_name: str
-
-
 class LanguageSettingsRequest(BaseModel):
     language: str
 
@@ -357,7 +351,6 @@ def get_settings():
             "bangumi_token",
             "steam_key",
             "steamgriddb_api_key",
-            "psn_npsso",
         )
     }
     return result
@@ -377,7 +370,6 @@ def reveal_setting_secret(field_name: str):
         "bangumi_token",
         "steam_key",
         "steamgriddb_api_key",
-        "psn_npsso",
     }
     if field_name not in allowed:
         raise InvalidInputError(
@@ -704,23 +696,6 @@ def _sync_steam_account_locked(steamid: str, template_id: str | None = None):
     return {"ok": True, "total": registered}
 
 
-@router.post("/steam/backfill")
-def backfill_steam_images():
-    """后台下载远程图片到本地，每次最多处理 20 张，返回剩余数量"""
-    return _backfill_images_for_source("steam")
-
-
-@router.post("/images/backfill")
-def backfill_platform_images(source: str = ""):
-    """按平台回填远程封面；空 source 兼容为全部平台。"""
-    if source not in {"", "steam", "psn", "xbox", "nintendo"}:
-        raise InvalidInputError(
-            "图片回填来源不正确",
-            code="backfill_source_invalid",
-        )
-    return _backfill_images_for_source(source)
-
-
 async def _backfill_image_events(mgr, source: str):
     """Publish committed per-cover results, including the initial work count."""
     ok = fail = deferred = 0
@@ -795,19 +770,6 @@ async def backfill_platform_images_stream(source: str = ""):
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
-def _backfill_images_for_source(source: str):
-    mgr = get_manager()
-    ok, fail, deferred = mgr.backfill_remote_images(limit=20, source=source)
-    remaining, retry_pending = mgr.get_backfill_status(source)
-    return {
-        "ok": ok,
-        "fail": fail,
-        "deferred": deferred,
-        "remaining": remaining,
-        "retry_pending": retry_pending,
-    }
-
-
 # === 内部辅助 ===
 
 def _steam_group_name(steamid: str) -> str:
@@ -817,56 +779,7 @@ def _steam_group_name(steamid: str) -> str:
     return format_account_group_name("steam_import_" + str(steamid), info.get("personaname"))
 
 
-def _ensure_steam_group(steamid, template_id: str | None = None):
-    """为指定 steam 账号创建/查找独立分组，分组名使用 Steam 昵称"""
-    mgr = get_manager()
-    sid = "steam_import_" + str(steamid)
-
-    gname = _steam_group_name(steamid)
-    target = mgr.get_template(template_id)
-    library = target.hidden_preset
-
-    found = False
-    for g in library.groups:
-        if g.id == sid:
-            g.name = gname  # 名称可能已更新
-            found = True
-            break
-    if not found:
-        sg = ImageGroup(id=sid, name=gname, image_ids=[])
-        library.groups.append(sg)
-        target.library_group_states[sid] = True
-        mgr.save_project()
-    return mgr, sid
-
-
-def _ensure_psn_group(account_id, online_id, template_id: str | None = None):
-    """为指定 PSN 账号创建/查找独立分组，分组名使用 PSN 在线 ID"""
-    mgr = get_manager()
-    sid = "psn_import_" + str(account_id)
-    gname = format_account_group_name(sid, online_id)
-
-    target = mgr.get_template(template_id)
-    library = target.hidden_preset
-    found = False
-    for g in library.groups:
-        if g.id == sid:
-            g.name = gname
-            found = True
-            break
-    if not found:
-        sg = ImageGroup(id=sid, name=gname, image_ids=[])
-        library.groups.append(sg)
-        target.library_group_states[sid] = True
-        mgr.save_project()
-    return sid
-
-
 # === PSN 设置与账号管理 ===
-
-class PSNSettingsRequest(BaseModel):
-    psn_npsso: str | None = None
-
 
 class PSNBindRequest(BaseModel):
     psn_online_id: str = ""
@@ -875,14 +788,6 @@ class PSNBindRequest(BaseModel):
 class PSNFilterRequest(BaseModel):
     categories: list = []
     min_play_duration_hours: float = 0.0
-
-
-@router.put("/psn")
-def update_psn_settings(req: PSNSettingsRequest):
-    """保存 PSN NPSSO"""
-    if req.psn_npsso is not None:
-        ConfigHandler.update_config_fields({"psn_npsso": req.psn_npsso.strip()})
-    return {"ok": True}
 
 
 @router.get("/psn/accounts")
@@ -1056,12 +961,6 @@ def bind_psn_account(req: PSNBindRequest, template_id: str | None = None):
     return {"ok": True, "total": registered, "account_id": aid}
 
 
-@router.post("/psn/backfill")
-def backfill_psn_images():
-    """后台下载 PSN 远程图片到本地，每次最多处理 20 张，返回剩余数量"""
-    return _backfill_images_for_source("psn")
-
-
 @router.get("/psn/filters")
 def get_psn_filters():
     """获取 PSN 筛选配置"""
@@ -1216,28 +1115,6 @@ def _register_xbox_titles(result, mgr, template_id: str | None = None):
     return {"ok": True, "total": registered, "xuid": xuid, "gamertag": gamertag}
 
 
-def _ensure_xbox_group(xuid, gamertag, template_id: str | None = None):
-    """为指定 Xbox 账号创建/查找独立分组"""
-    mgr = get_manager()
-    sid = "xbox:" + str(xuid)
-    gname = format_account_group_name(sid, gamertag)
-
-    target = mgr.get_template(template_id)
-    library = target.hidden_preset
-    found = False
-    for g in library.groups:
-        if g.id == sid:
-            g.name = gname
-            found = True
-            break
-    if not found:
-        sg = ImageGroup(id=sid, name=gname, image_ids=[])
-        library.groups.append(sg)
-        target.library_group_states[sid] = True
-        mgr.save_project()
-    return sid
-
-
 class ClearSourceRequest(BaseModel):
     source: str = ""  # steam / igdb / bangumi / vndb / steamgriddb / xbox / nintendo / cache，空字符串 = 全部
 
@@ -1262,17 +1139,3 @@ def reset_all_images():
     count = mgr.reset_all_images()
     logger.info("重置所有图片: 删除了 %d 项", count)
     return {"ok": True, "deleted": count}
-
-
-@router.get("/cache_sources")
-def list_cache_sources():
-    """列出所有缓存来源及其文件数"""
-    import os as _os
-    mgr = get_manager()
-    sources = {}
-    data_dir = os.path.join(mgr.root_dir, "data")
-    for folder in mgr._source_folders():
-        d = os.path.join(data_dir, folder)
-        count = len(_os.listdir(d)) if _os.path.exists(d) else 0
-        sources[folder] = count
-    return {"sources": sources, "total": sum(sources.values())}

@@ -12,7 +12,7 @@ import httpx
 from starlette.concurrency import run_in_threadpool
 
 from src.core.config_handler import ConfigHandler
-from src.core.errors import AppError, CredentialMissingError, RemoteTimeoutError
+from src.core.errors import AppError, CredentialMissingError
 from .models import SOURCE_NAMES, SearchItem, SourceOutcome
 from .providers.bangumi import BangumiProvider
 from .providers.igdb import IGDBProvider
@@ -29,10 +29,12 @@ class SearchService:
     TOTAL_TIMEOUT_SECONDS = 15.0
     CONNECT_TIMEOUT_SECONDS = 3.0
     READ_TIMEOUT_SECONDS = 8.0
-    _concurrency = asyncio.Semaphore(8)
 
     def __init__(self, config_reader: Callable[[], dict[str, Any]] | None = None):
         self._config_reader = config_reader or ConfigHandler.read_config
+        # Per instance: the cover backfill runs searches on its own event loop,
+        # and a semaphore must not be shared between loops.
+        self._concurrency = asyncio.Semaphore(8)
 
     async def _read_config(self) -> dict[str, Any]:
         try:

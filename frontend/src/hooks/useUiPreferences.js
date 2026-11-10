@@ -25,7 +25,13 @@
     );
     const desktopUiPreferencesLoadedRef = useRef(false);
     const uiPreferencesSaveTimerRef = useRef(null);
-    const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+    const [theme, setTheme] = useState(() => {
+      try {
+        return localStorage.getItem('theme') || 'dark';
+      } catch (error) {
+        return 'dark'; // Storage can be blocked; the theme still works for this session.
+      }
+    });
     const [showSettings, setShowSettings] = useState(initialUiPreferences.settingsOpen);
     const [settingsActiveSection, setSettingsActiveSection] = useState(
       initialUiPreferences.settingsActiveSection
@@ -100,7 +106,11 @@
     };
     useEffect(() => {
       document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('theme', theme);
+      try {
+        localStorage.setItem('theme', theme);
+      } catch (error) {
+        /* The theme stays applied for this session. */
+      }
     }, [theme]);
     useLayoutEffect(() => {
       const root = document.documentElement;

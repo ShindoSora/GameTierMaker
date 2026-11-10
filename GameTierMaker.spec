@@ -30,7 +30,6 @@ a = Analysis(
         'fastapi',
         'PIL',
         'requests',
-        'xbox.webapi.scripts.authenticate',
     ] + xbox_hiddenimports + websocket_hiddenimports,
     hookspath=[],
     hooksconfig={},

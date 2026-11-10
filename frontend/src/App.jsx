@@ -39,7 +39,6 @@
     BrowserPreview,
     ColorPicker,
     TierContextMenu,
-    PresetsDialog,
     LiquidGlassEffects,
   } = window.GameTierApp;
   function App() {
@@ -327,8 +326,6 @@
         {/* 等级行右键菜单（顶层渲染，避免被 GlowCard transform 影响定位） */}
         {<TierContextMenu tierBoardModel={tierBoardModel} />}
 
-        {/* Import Presets Modal */}
-        {<PresetsDialog libraryModel={libraryModel} />}
       </div>
     );
   }

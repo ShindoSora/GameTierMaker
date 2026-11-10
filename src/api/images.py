@@ -178,6 +178,7 @@ async def download_image(req: DownloadRequest, template_id: str | None = None):
                     file_path,
                     group_id=req.group_id,
                     steam_id=req.steam_id,
+                    game_name=req.game_name,
                 )
         return file_path
 
@@ -231,35 +232,9 @@ def delete_image(
     return {"ok": True}
 
 
-@router.get("/{image_id}/thumbnail")
-async def get_thumbnail(image_id: str):
-    """获取缩略图"""
-    image_id = validate_image_id(image_id)
-    def resolve_thumbnail():
-        svc = get_image_svc()
-        mgr = get_manager()
-        with mgr._save_lock:
-            meta = mgr.project_data.shared_images_meta.get(image_id)
-            if meta is None:
-                return ""
-            meta_path = meta.path
-            is_remote = meta.is_remote
-        path = svc.get_thumbnail_path(image_id)
-        if not is_remote and meta_path:
-            source_path = svc.get_full_image_path(meta_path)
-            if os.path.exists(source_path):
-                path = svc.ensure_thumbnail(source_path, image_id)
-        return path
-
-    path = await run_in_threadpool(resolve_thumbnail)
-    if os.path.exists(path):
-        return FileResponse(path)
-    raise HTTPException(404, "缩略图不存在")
-
-
 @router.get("/{image_id}/original")
 async def get_original_image(image_id: str):
-    """Serve a saved original without creating or refreshing thumbnails."""
+    """Serve a saved original image."""
     image_id = validate_image_id(image_id)
 
     def resolve_original():
@@ -275,18 +250,6 @@ async def get_original_image(image_id: str):
     if os.path.isfile(path):
         return FileResponse(path)
     raise HTTPException(404, "本地原图不存在")
-
-
-@router.get("/{image_id}/info")
-def get_image_info(image_id: str):
-    """获取图片元数据"""
-    image_id = validate_image_id(image_id)
-    mgr = get_manager()
-    with mgr._save_lock:
-        meta = mgr.project_data.shared_images_meta.get(image_id)
-        if meta:
-            return {"id": meta.id, "path": meta.path, "original_name": meta.original_name}
-    raise HTTPException(404, "图片不存在")
 
 
 def _find_source(mgr, image_id: str, template_id: str | None = None):

@@ -124,12 +124,6 @@ class NintendoAuthCompleteRequest(BaseModel):
     callback_url: str = Field(min_length=1, max_length=8192)
 
 
-class NintendoImportRequest(BaseModel):
-    preview_id: str = Field(min_length=1, max_length=128)
-    record_keys: list[str] = Field(min_length=1, max_length=1000)
-    request_id: str = Field(min_length=1, max_length=128)
-
-
 class NintendoSyncRequest(BaseModel):
     exclude_demos: bool = False
     request_id: str = Field(default_factory=lambda: uuid.uuid4().hex, min_length=1, max_length=128)
@@ -312,36 +306,6 @@ def sync_nintendo_account(
                 _PREVIEWS.pop(preview_id, None)
         NintendoStore.touch_sync(account_id)
         return result
-
-
-@router.get("/nintendo/accounts/{account_id}/records")
-def get_nintendo_records(account_id: str):
-    account_id = _account_id(account_id)
-    records = NintendoStore.load_records(account_id)
-    if records is None:
-        raise AccountNotFoundError("未找到 Nintendo 游玩记录", code="nintendo_records_not_found")
-    return {
-        "ok": True,
-        "account_id": account_id,
-        "bound": NintendoStore.get_account(account_id) is not None,
-        "records": records,
-    }
-
-
-@router.post("/nintendo/accounts/{account_id}/import")
-def import_nintendo_records(account_id: str, req: NintendoImportRequest):
-    account_id = _account_id(account_id)
-    account = NintendoStore.get_account(account_id)
-    if not account:
-        raise AccountNotFoundError("未找到 Nintendo 账号", code="nintendo_account_not_found")
-    with _account_lock(account_id):
-        account = NintendoStore.get_account(account_id)
-        if not account:
-            raise AccountNotFoundError("未找到 Nintendo 账号", code="nintendo_account_not_found")
-        return _import_nintendo_records_locked(
-            account_id, account, preview_id=req.preview_id,
-            record_keys=req.record_keys, request_id=req.request_id,
-        )
 
 
 def _import_nintendo_records_locked(

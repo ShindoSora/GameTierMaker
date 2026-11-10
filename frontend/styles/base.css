@@ -74,7 +74,6 @@
   --sidebar-bg: rgba(248,250,253,0.94);
 }
 [data-theme="light"] .btn-primary { color: #fff; }
-[data-theme="light"] .btn-success { color: var(--success); }
 [data-theme="light"] .btn-danger { color: var(--danger); }
 * { margin:0; padding:0; box-sizing:border-box; }
 html { height: 100%; overflow: hidden; background: var(--bg-page); color-scheme: dark; }
@@ -115,14 +114,10 @@ body {
 .btn-primary:hover { background: var(--action-hover); box-shadow: 0 4px 16px var(--accent-glow); }
 .btn-danger { background: rgba(240,96,96,0.15); border-color: rgba(240,96,96,0.2); color: var(--danger); }
 .btn-danger:hover { background: rgba(240,96,96,0.25); }
-.btn-success { background: rgba(92,219,139,0.12); border-color: rgba(92,219,139,0.2); color: var(--success); }
-.btn-success:hover { background: rgba(92,219,139,0.2); }
 .btn-icon { background: transparent; border: none; padding: 4px; min-width: 28px; min-height: 28px; border-radius: var(--control-radius); }
 .btn-icon:hover { background: var(--surface-hover); }
 .btn-sm { padding: 5px 11px; min-height: 32px; font-size: 12px; border-radius: var(--control-radius); }
 .btn-xs { padding: 4px 9px; min-height: 30px; font-size: 12px; border-radius: var(--control-radius); }
-.group-delete-button { width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0; justify-content: center; }
-.group-delete-button svg { display: block; }
 
 /* Input */
 .input {

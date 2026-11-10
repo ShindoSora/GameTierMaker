@@ -1,7 +1,8 @@
-"""Invisible, isolated sessions in an installed Edge/Chrome, streamed over CDP.
+"""Invisible, isolated login sessions streamed to the UI over CDP messages.
 
-No browser binary, Node driver, existing browser profile or public debugger port
-is used. Credentials and debugger addresses never enter public status messages.
+This is the shared session logic. The concrete browser (see webview_browser.py)
+supplies ``_start_browser`` and ``_attach``. Credentials and debugger addresses
+never enter public status messages.
 """
 from __future__ import annotations
 
@@ -11,7 +12,6 @@ import contextlib
 import json
 import logging
 import math
-import os
 from pathlib import Path
 import queue
 import secrets
@@ -22,9 +22,6 @@ import threading
 import time
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
-
-import httpx
-from websockets.asyncio.client import connect
 
 from src.core.browser_auth import NPSSO_PATTERN, PsnLoginRateLimitError, allowed_navigation, is_callback
 from src.core.errors import AppError, RemoteServiceError, RemoteTimeoutError
@@ -65,99 +62,6 @@ def sony_retry_after(headers):
         except (ValueError, TypeError, OverflowError):
             pass
     return 60  # Local backoff when Sony doesn't provide a usable delay.
-
-
-def find_installed_browser():
-    """Use executable paths only. Never attach to the user's running browser."""
-    candidates = []
-    if os.name == "nt":
-        import winreg
-        for executable, name in (("msedge.exe", "Microsoft Edge"), ("chrome.exe", "Google Chrome")):
-            for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-                for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
-                    try:
-                        with winreg.OpenKey(hive, rf"Software\Microsoft\Windows\CurrentVersion\App Paths\{executable}",
-                                            0, winreg.KEY_READ | view) as key:
-                            candidates.append((Path(winreg.QueryValue(key, None).strip('"')), name))
-                    except OSError:
-                        pass
-        for variable in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
-            root = os.environ.get(variable)
-            if not root:
-                continue
-            for folder, name in (("Edge", "Microsoft Edge"), ("Edge Beta", "Microsoft Edge Beta")):
-                candidates.append((Path(root) / "Microsoft" / folder / "Application" / "msedge.exe", name))
-            candidates.append((Path(root) / "Google/Chrome/Application/chrome.exe", "Google Chrome"))
-    candidates.sort(key=lambda item: 0 if item[1].startswith("Microsoft Edge") else 1)
-    for path, name in candidates:
-        if path.is_file():
-            return path.resolve(), name
-    raise AppError("未找到本机 Edge 或 Chrome，请先安装其中一个浏览器", code="local_browser_missing")
-
-
-class CDPConnection:
-    def __init__(self, url, target_id, handler):
-        self.url, self.target_id, self.handler = url, target_id, handler
-        self.pending = {}
-        self.counter = 0
-        self.tasks = set()
-
-    async def open(self):
-        self.ws = await connect(self.url, proxy=None, open_timeout=5, max_size=12 * 1024 * 1024,
-                                compression=None)
-        self.reader = asyncio.create_task(self._read())
-        return self
-
-    async def send(self, method, params=None, *, timeout=6):
-        self.counter += 1
-        request_id = self.counter
-        future = asyncio.get_running_loop().create_future()
-        self.pending[request_id] = future
-        try:
-            await self.ws.send(json.dumps({"id": request_id, "method": method, "params": params or {}}))
-            return await asyncio.wait_for(future, timeout)
-        finally:
-            self.pending.pop(request_id, None)
-
-    async def _read(self):
-        try:
-            async for raw in self.ws:
-                packet = json.loads(raw)
-                if "id" in packet:
-                    future = self.pending.get(packet["id"])
-                    if future and not future.done():
-                        if "error" in packet:
-                            future.set_exception(RuntimeError("Browser command failed"))
-                        else:
-                            future.set_result(packet.get("result", {}))
-                else:
-                    task = asyncio.create_task(self.handler(self, packet.get("method", ""), packet.get("params", {})))
-                    self.tasks.add(task)
-                    task.add_done_callback(self._finished)
-        except Exception:
-            pass
-        finally:
-            for future in list(self.pending.values()):
-                if not future.done():
-                    future.set_exception(RuntimeError("Browser connection closed"))
-
-    def _finished(self, task):
-        self.tasks.discard(task)
-        if not task.cancelled():
-            task.exception()  # Consume errors without logging URLs or input payloads.
-
-    async def close(self):
-        self.reader.cancel()
-        for task in list(self.tasks):
-            task.cancel()
-        await asyncio.gather(self.reader, *self.tasks, return_exceptions=True)
-        await self.ws.close()
-
-
-class ReusedBrowserHost:
-    def new_session(self):
-        path, name = find_installed_browser()
-        return ReusedBrowserSession(path, name)
 
 
 class ReusedBrowserSession:
@@ -270,8 +174,6 @@ class ReusedBrowserSession:
             for client in self.clients:
                 with contextlib.suppress(Exception):
                     await client.close()
-            if hasattr(self, "http"):
-                await self.http.aclose()
             if self.process:
                 try:
                     await asyncio.to_thread(self.process.wait, 3)
@@ -300,35 +202,6 @@ class ReusedBrowserSession:
             self.urls.clear()
             self.clients.clear()
 
-    async def _start_browser(self):
-        self.profile_dir = Path(tempfile.mkdtemp(prefix="gtm-reused-browser-")).resolve()
-        self.process = subprocess.Popen([
-            str(self.executable), "--headless=new", "--remote-debugging-address=127.0.0.1",
-            "--remote-debugging-port=0", f"--user-data-dir={self.profile_dir}",
-            "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-            "--disable-background-mode", "--window-size=1000,700",
-            # Ignore Windows display scaling; the viewer's pixel density is applied per frame
-            # through Emulation.setDeviceMetricsOverride, so it must not be scaled twice.
-            "--force-device-scale-factor=1", "about:blank",
-        ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-        port_file = self.profile_dir / "DevToolsActivePort"
-        deadline = time.monotonic() + 15
-        while not port_file.exists():
-            if self.cancelled.is_set():
-                raise AppError("登录已取消", code="browser_auth_cancelled")
-            if self.process.poll() is not None or time.monotonic() > deadline:
-                raise AppError("无法启动本机浏览器，请检查浏览器是否可用", code="local_browser_start_failed")
-            await asyncio.sleep(.1)
-        lines = port_file.read_text().splitlines()
-        self.debug_origin = f"http://127.0.0.1:{int(lines[0])}"
-        self.http = httpx.AsyncClient(trust_env=False, timeout=3)
-        version = (await self.http.get(self.debug_origin + "/json/version")).json()
-        self.root = await self._connect(version["webSocketDebuggerUrl"], "browser")
-        targets = (await self.http.get(self.debug_origin + "/json/list")).json()
-        target = next(item for item in targets if item.get("type") == "page")
-        await self._attach(target["id"], target["webSocketDebuggerUrl"])
-
     async def _navigate_initial(self, client):
         try:
             response = await client.send("Page.navigate", {"url": self.spec.url}, timeout=60)
@@ -345,25 +218,6 @@ class ReusedBrowserSession:
                                        code="local_browser_navigation_failed")
             if not self.result.done():
                 self.result.set_exception(error)
-
-    async def _connect(self, url, target_id):
-        client = await CDPConnection(url, target_id, self._event).open()
-        self.clients.append(client)
-        return client
-
-    async def _attach(self, target_id, ws_url=None):
-        if target_id in self.pages or target_id in self.attaching or self.closing:
-            return
-        self.attaching.add(target_id)
-        try:
-            if not ws_url:
-                targets = (await self.http.get(self.debug_origin + "/json/list")).json()
-                ws_url = next(item["webSocketDebuggerUrl"] for item in targets if item["id"] == target_id)
-            client = await self._connect(ws_url, target_id)
-            self.pages[target_id] = client
-            await self._configure_page(client)
-        finally:
-            self.attaching.discard(target_id)
 
     async def _configure_page(self, client):
         target_id = client.target_id

@@ -1,5 +1,4 @@
 """WebView2 renders in an invisible helper; all user interaction stays in the panel."""
-import asyncio
 import os
 from pathlib import Path
 import subprocess

@@ -10,16 +10,14 @@ Game Tier Maker — 本地网页 + Webview 桌面端
   GameTierMaker.exe --browser   → 在默认浏览器打开本地网页
 """
 
-import os, sys, logging, traceback, threading, argparse, socket, time
+import os, sys, logging, traceback, threading, argparse
 if __name__ == "__main__" and len(sys.argv) == 3 and sys.argv[1] == "--embedded-browser-helper":
     from src.core.webview_browser_helper import main as run_embedded_browser_helper
     run_embedded_browser_helper(sys.argv[2])
     raise SystemExit(0)
 
 from contextlib import asynccontextmanager
-from http.client import HTTPConnection
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -57,7 +55,6 @@ if sys.stderr is None:
 # ── 路径解析 ──────────────────────────────────────────
 # onefile 模式把只读资源解压到 sys._MEIPASS；用户数据则保存在 exe 旁。
 IS_FROZEN = getattr(sys, "frozen", False)
-IS_XBOX_AUTH_HELPER = "--xbox-authenticate" in sys.argv
 if IS_FROZEN:
     EXE_DIR = Path(sys.executable).resolve().parent
     RESOURCE_DIR = Path(sys._MEIPASS)
@@ -78,7 +75,7 @@ BACKUPS_DIR = USER_DATA_DIR / "backups"
 
 _instance_guard = SingleInstanceGuard(
     sys.executable,
-    enabled=IS_FROZEN and not IS_XBOX_AUTH_HELPER,
+    enabled=IS_FROZEN,
 )
 try:
     instance_acquired = _instance_guard.acquire()
@@ -113,11 +110,6 @@ launch_mode.add_argument("--browser", dest="desktop", action="store_false", help
 parser.set_defaults(desktop=IS_FROZEN)
 parser.add_argument("--port", type=int, default=None,
                     help="固定使用指定端口；默认尝试 8000，不可用时自动选择；0 为自动分配")
-parser.add_argument(
-    "--xbox-authenticate",
-    metavar="TOKEN_PATH",
-    help=argparse.SUPPRESS,
-)
 args = parser.parse_args()
 if args.port is not None and not 0 <= args.port <= 65535:
     parser.error("--port 必须在 0 到 65535 之间")
@@ -479,26 +471,7 @@ def _run_webview(url="http://127.0.0.1:8000", title="Game Tier Maker"):
     webview.start(gui="edgechromium")
 
 
-def _run_xbox_auth_helper(tokens_file):
-    """Run xbox-webapi's browser authentication inside the packaged EXE."""
-    from xbox.webapi.scripts.authenticate import main as xbox_authenticate
-
-    original_argv = sys.argv[:]
-    sys.argv = ["xbox-authenticate", "--tokens", str(Path(tokens_file).resolve())]
-    try:
-        xbox_authenticate()
-    finally:
-        sys.argv = original_argv
-
-
 if __name__ == "__main__":
-    if args.xbox_authenticate:
-        try:
-            _run_xbox_auth_helper(args.xbox_authenticate)
-        finally:
-            _instance_guard.release()
-        raise SystemExit(0)
-
     HOST = "127.0.0.1"
     preferred_port = args.port if args.port is not None else (0 if IS_FROZEN or args.desktop else 8000)
     try:

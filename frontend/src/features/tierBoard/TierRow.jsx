@@ -64,7 +64,11 @@
           draggable={true}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            // Start from the saved label, not a stale or emptied draft.
+            if (!editing) setName(tier.label);
+            setEditing(true);
+          }}
           onContextMenu={(e) => {
             e.preventDefault();
             onContextMenu(e, tier);

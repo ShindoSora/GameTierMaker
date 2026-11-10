@@ -118,23 +118,6 @@ def delete_template(template_id: str):
 
 # === 当前模板的等级行操作 ===
 
-@router.get("/current/tiers")
-def get_current_tiers(template_id: str | None = None):
-    mgr = get_manager()
-    if mgr.get_template(template_id, required=False) is None:
-        raise HTTPException(404, "模板不存在")
-    with mgr.template_scope(template_id) as template:
-        return [
-            {
-                "id": tier.id,
-                "label": tier.label,
-                "color": tier.color,
-                "image_ids": list(tier.image_ids),
-            }
-            for tier in template.tiers
-        ]
-
-
 @router.post("/current/tiers")
 def add_tier_row(req: TierRowRequest, template_id: str | None = None):
     mgr = get_manager()
@@ -181,14 +164,3 @@ def reorder_tiers(req: ReorderRequest, template_id: str | None = None):
     with mgr.template_scope(template_id):
         mgr.move_tier_row(req.from_index, req.to_index)
     return {"ok": True}
-
-
-# === 未排序图片 ===
-
-@router.get("/current/unassigned")
-def get_unassigned(template_id: str | None = None):
-    mgr = get_manager()
-    if mgr.get_template(template_id, required=False) is None:
-        raise HTTPException(404, "模板不存在")
-    with mgr.template_scope(template_id) as template:
-        return {"image_ids": list(template.unassigned_images)}

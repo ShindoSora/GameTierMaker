@@ -1,16 +1,16 @@
 /* Keep this order: later rules intentionally override earlier layout rules. */
-@import url("./base.css?v=20261013-controls");
+@import url("./base.css?v=20261110-cleanup");
 @import url("./tier-board.css?v=20261013-tier-morph");
-@import url("./layout.css?v=20261013-controls");
-@import url("./components.css?v=20261022-group-colors");
+@import url("./layout.css?v=20261110-cleanup");
+@import url("./components.css?v=20261110-cleanup");
 @import url("./logs.css?v=20261022-neutral-rows");
-@import url("./settings.css?v=20261019-control-alignment");
-@import url("./overrides.css?v=20261025-material-settings");
+@import url("./settings.css?v=20261110-cleanup");
+@import url("./overrides.css?v=20261110-cleanup");
 @import url("./theme-switch.css?v=20261016-sky-switch");
-@import url("./glass.css?v=20261028-liquid-rim-6");
-@import url("./search-panel.css?v=20261025-material-settings");
+@import url("./glass.css?v=20261110-cleanup");
+@import url("./search-panel.css?v=20261110-cleanup");
 @import url("./browser-preview.css?v=20261020-user-copy");
 @import url("./download-queue.css?v=20261023-centered-controls");
-@import url("./refinements.css?v=20261022-group-colors");
+@import url("./refinements.css?v=20261110-cleanup");
 @import url("./library-browser.css?v=20261023-sliding-groups");
 @import url("./template-transition.css?v=20261028-blackhole-dust");

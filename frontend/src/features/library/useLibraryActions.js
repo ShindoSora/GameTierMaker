@@ -15,8 +15,6 @@
     const [activeLibraryGroup, setActiveLibraryGroup] = useState(null);
     const libraryGroupsRef = useRef(null);
     const activeGroupRef = useRef(null);
-    const [showPresetsModal, setShowPresetsModal] = useState(false);
-    const [presetsList, setPresetsList] = useState([]);
     const groupOperationsRef = useRef(new Set());
     const handleDeleteGroup = async (groupId) => {
       if (groupOperationsRef.current.has(groupId)) return;
@@ -65,40 +63,7 @@
         await refreshSelectedTemplate();
       } catch (e) {
         console.error(e);
-      }
-    };
-    const handleImportPreset = async () => {
-      try {
-        const res = await fetchAPI('/library/presets');
-        const filtered = (res.presets || []).filter((p) => p.template_id !== currentId);
-        setPresetsList(filtered);
-        setShowPresetsModal(true);
-      } catch (e) {
-        showToast(getErrorMessage(e, 'errors.presetListFailed'), 'error');
-      }
-    };
-    const handleImportFromTemplate = async (templateId) => {
-      try {
-        const res = await fetchAPI(
-          `/library/presets/import/${templateId}?target_template_id=${encodeURIComponent(currentId)}`,
-          {
-            method: 'POST',
-          }
-        );
-        setShowPresetsModal(false);
-        await refreshSelectedTemplate();
-        if (res.imported > 0) {
-          showToast(
-            t('preset.imported', {
-              count: res.imported,
-            }),
-            'success'
-          );
-        } else {
-          showToast(t('preset.alreadyImported'));
-        }
-      } catch (e) {
-        showToast(getErrorMessage(e, 'errors.importFailed'), 'error');
+        showToast(getErrorMessage(e, 'errors.requestFailed'), 'error');
       }
     };
     const handleCreateGroup = async () => {
@@ -149,13 +114,9 @@
     return {
       activeLibraryGroup,
       libraryGroupsRef,
-      showPresetsModal,
-      setShowPresetsModal,
-      presetsList,
       handleDeleteGroup,
       handleOpenLibraryGroup,
       handleDropToGroup,
-      handleImportFromTemplate,
       handleCreateGroup,
       handleClearGroup,
       activeGroupData,

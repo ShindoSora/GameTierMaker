@@ -25,24 +25,36 @@
       document.addEventListener('click', close);
       return () => document.removeEventListener('click', close);
     }, [tierContextMenu]);
+    const reportFailure = (error) => {
+      console.error(error);
+      if (mountedRef.current) showToast(getErrorMessage(error, 'errors.requestFailed'), 'error');
+    };
     const handleAddTier = async () => {
-      await fetchAPI(`/templates/current/tiers?template_id=${encodeURIComponent(currentId)}`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-      await loadCurrentTemplate(currentId);
+      try {
+        await fetchAPI(`/templates/current/tiers?template_id=${encodeURIComponent(currentId)}`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+        await loadCurrentTemplate(currentId);
+      } catch (error) {
+        reportFailure(error);
+      }
     };
     const handleRenameTier = async (tierId, newName) => {
-      await fetchAPI(
-        `/templates/current/tiers/${tierId}/rename?template_id=${encodeURIComponent(currentId)}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            new_name: newName,
-          }),
-        }
-      );
-      await loadCurrentTemplate(currentId);
+      try {
+        await fetchAPI(
+          `/templates/current/tiers/${encodeURIComponent(tierId)}/rename?template_id=${encodeURIComponent(currentId)}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              new_name: newName,
+            }),
+          }
+        );
+        await loadCurrentTemplate(currentId);
+      } catch (error) {
+        reportFailure(error);
+      }
     };
     const [colorPicker, setColorPicker] = useState(null);
     const PRESET_COLORS = [
@@ -82,17 +94,21 @@
     };
     const applyTierColor = async () => {
       if (!colorPicker || !colorPicker.color) return;
-      await fetchAPI(
-        `/templates/current/tiers/${colorPicker.tierId}/color?template_id=${encodeURIComponent(currentId)}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            color: colorPicker.color,
-          }),
-        }
-      );
-      setColorPicker(null);
-      await loadCurrentTemplate(currentId);
+      try {
+        await fetchAPI(
+          `/templates/current/tiers/${encodeURIComponent(colorPicker.tierId)}/color?template_id=${encodeURIComponent(currentId)}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              color: colorPicker.color,
+            }),
+          }
+        );
+        setColorPicker(null);
+        await loadCurrentTemplate(currentId);
+      } catch (error) {
+        reportFailure(error);
+      }
     };
     const handleDeleteTier = async (tierId) => {
       const targetTemplateId = currentId, key = JSON.stringify([currentId, tierId]);
@@ -123,17 +139,21 @@
       }
     };
     const handleRowReorder = async (fromIdx, toIdx) => {
-      await fetchAPI(
-        `/templates/current/tiers/reorder?template_id=${encodeURIComponent(currentId)}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            from_index: fromIdx,
-            to_index: toIdx,
-          }),
-        }
-      );
-      await loadCurrentTemplate(currentId);
+      try {
+        await fetchAPI(
+          `/templates/current/tiers/reorder?template_id=${encodeURIComponent(currentId)}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              from_index: fromIdx,
+              to_index: toIdx,
+            }),
+          }
+        );
+        await loadCurrentTemplate(currentId);
+      } catch (error) {
+        reportFailure(error);
+      }
     };
     const handleTierContextMenu = (e, tier) => {
       setTierContextMenu({
@@ -156,7 +176,7 @@
         });
         await loadCurrentTemplate(currentId);
       } catch (e) {
-        console.error(e);
+        reportFailure(e);
       }
     };
     const handleDropToUnassigned = async (e, index = -1) => {
@@ -177,7 +197,7 @@
           });
           await loadCurrentTemplate(currentId);
         } catch (err) {
-          console.error(err);
+          reportFailure(err);
         }
       }
     };
@@ -193,7 +213,7 @@
         await loadCurrentTemplate(currentId);
         showToast(t('image.addedToUnassigned'), 'success');
       } catch (e) {
-        console.error(e);
+        reportFailure(e);
       }
     };
     return {

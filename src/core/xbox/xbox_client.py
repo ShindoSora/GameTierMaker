@@ -14,6 +14,7 @@ from xbox.webapi.scripts import CLIENT_ID, CLIENT_SECRET
 from src.core.config_handler import ConfigHandler
 from src.core.errors import (
     AccountNotFoundError,
+    AppError,
     CredentialExpiredError,
     RemoteResponseError,
     RemoteServiceError,
@@ -34,6 +35,7 @@ class XboxClient:
     def __init__(self):
         self.config = ConfigHandler.read_config()
         self.xbox_token = XboxLiveToken()
+        self._session = None
 
     async def _get_client(self):
         try:
@@ -41,6 +43,9 @@ class XboxClient:
             json_str = await asyncio.to_thread(
                 self.xbox_token.get_xbox_live_token
             )
+        except AppError:
+            # Keep the specific reason, e.g. no Xbox login has been stored yet.
+            raise
         except Exception as exc:
             raise CredentialExpiredError(
                 "Xbox 登录信息无效，请重新完成账号验证",
@@ -107,7 +112,9 @@ class XboxClient:
             ) from exc
 
         try:
-            return XboxLiveClient(auth_mgr)
+            client = XboxLiveClient(auth_mgr)
+            self._session = session
+            return client
         except Exception as exc:
             await self._close_session(session)
             raise RemoteServiceError(
@@ -179,7 +186,15 @@ class XboxClient:
 
     async def get_xbox_games(self, gamertag):
         xbl_client = await self._get_client()
+        try:
+            return await self._fetch_xbox_games(xbl_client, gamertag)
+        finally:
+            # The signed session owns an HTTP connection pool; always release it.
+            session, self._session = self._session, None
+            if session is not None:
+                await self._close_session(session)
 
+    async def _fetch_xbox_games(self, xbl_client, gamertag):
         # 获取 xuid
         logger.info("查询 Xbox 玩家: %s", gamertag)
         account_not_found_message = f"未找到 Xbox 玩家“{gamertag}”"
@@ -267,11 +282,11 @@ class XboxClient:
         raw_titles = games_data.get("titles", [])
         if not isinstance(raw_titles, list):
             raise RemoteResponseError("Xbox 游戏库数据格式异常")
-        logger.info("title_history 顶层 keys: %s", list(games_data.keys()))
-        logger.info("titles 总数: %d", len(raw_titles))
+        logger.debug("title_history 顶层 keys: %s", list(games_data.keys()))
+        logger.debug("titles 总数: %d", len(raw_titles))
 
         if raw_titles:
-            logger.info("第一条原始 keys: %s", list(raw_titles[0].keys()) if isinstance(raw_titles[0], dict) else type(raw_titles[0]))
+            logger.debug("第一条原始 keys: %s", list(raw_titles[0].keys()) if isinstance(raw_titles[0], dict) else type(raw_titles[0]))
 
         # 格式化游戏数据
         titles = []

@@ -2,7 +2,7 @@
 图片库管理 API
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from src.api.deps import get_manager
 from src.core.library_groups import format_account_group_name
@@ -38,52 +38,8 @@ def build_library_payload(mgr, template_id: str | None = None):
         return {"groups": groups, "images_meta": images_meta}
 
 
-class ReorderRequest(BaseModel):
-    from_index: int
-    to_index: int
-
-
-class GroupImageOrderRequest(BaseModel):
-    group_id: str
-    image_ids: list[str]
-
-
 class CreateGroupRequest(BaseModel):
     name: str
-
-
-@router.get("/groups")
-def list_groups(template_id: str | None = None):
-    mgr = get_manager()
-    return build_library_payload(mgr, template_id)
-
-
-@router.put("/groups/reorder")
-def reorder_groups(req: ReorderRequest, template_id: str | None = None):
-    mgr = get_manager()
-    with mgr.template_scope(template_id):
-        mgr.move_library_group(req.from_index, req.to_index)
-    return {"ok": True}
-
-
-@router.put("/groups/image-order")
-def set_group_image_order(req: GroupImageOrderRequest, template_id: str | None = None):
-    mgr = get_manager()
-    with mgr.template_scope(template_id):
-        mgr.set_library_group_image_order(req.group_id, req.image_ids)
-    return {"ok": True}
-
-
-@router.put("/groups/{group_id}/expand")
-def set_group_expanded(
-    group_id: str,
-    expanded: bool = True,
-    template_id: str | None = None,
-):
-    mgr = get_manager()
-    with mgr.template_scope(template_id):
-        mgr.set_library_group_expanded(group_id, expanded)
-    return {"ok": True}
 
 
 @router.delete("/groups/{group_id}")
@@ -92,25 +48,6 @@ def delete_group(group_id: str, template_id: str | None = None):
     with mgr.template_scope(template_id):
         mgr.delete_library_group(group_id)
     return {"ok": True}
-
-
-@router.get("/presets")
-def list_presets():
-    """列出所有模板的隐藏预设概况"""
-    mgr = get_manager()
-    return {"presets": mgr.get_hidden_presets_summary()}
-
-
-@router.post("/presets/import/{template_id}")
-def import_preset(template_id: str, target_template_id: str | None = None):
-    """将指定模板的隐藏图片库导入当前模板的隐藏图片库。"""
-    mgr = get_manager()
-    try:
-        with mgr.template_scope(target_template_id):
-            count = mgr.import_hidden_preset(template_id)
-        return {"ok": True, "imported": count}
-    except ValueError as e:
-        raise HTTPException(404, str(e))
 
 
 @router.post("/groups")

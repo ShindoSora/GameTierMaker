@@ -53,6 +53,15 @@ desktop.ini
 # === TEST ===
 /tests/
 /test/
+# Frontend test files (they consume the test-only exports on window.GameTierApp)
+/frontend/tests/
+/frontend/test/
+/frontend/**/__tests__/
+/frontend/**/*.test.js
+/frontend/**/*.test.jsx
+/frontend/**/*.spec.js
+/frontend/**/*.spec.jsx
+/tools/frontend/
 
 # === SKILLS ===
 AGENTS.md

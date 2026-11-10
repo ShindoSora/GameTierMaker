@@ -136,14 +136,6 @@ class ProjectManager:
                 )
             return template
 
-    def get_library_for_template(
-        self,
-        template_id: str | None = None,
-    ) -> ImageLibrary:
-        """返回指定模板的图片库，不改变全局的当前模板。"""
-        template = self.get_template(template_id)
-        return template.hidden_preset
-
     @contextmanager
     def template_scope(
         self,
@@ -264,14 +256,8 @@ class ProjectManager:
         """初始化默认项目结构"""
         self.project_data = ProjectData()
         self.current_template = None
-        self.project_data.global_preset_library.groups = [
-            ImageGroup(id=SEARCH_RESULTS_GROUP_ID, name=SEARCH_RESULTS_GROUP_NAME, image_ids=[]),
-            ImageGroup(id=LOCAL_UPLOAD_GROUP_ID, name=LOCAL_UPLOAD_GROUP_NAME, image_ids=[]),
-        ]
 
-        # 同步初始化 shared_image_library
-        self._ensure_library_groups(self._lib())
-
+        # 图片分组按需创建：首次下载或上传图片时才出现对应分组。
         # 创建第一个默认模板
         self.create_template(persist=persist)
 
@@ -308,61 +294,6 @@ class ProjectManager:
             }
         return True
 
-    def _ensure_library_groups(self, library: ImageLibrary):
-        search_group = library.find_group_by_id(SEARCH_RESULTS_GROUP_ID)
-        if not search_group:
-            for g in library.groups:
-                if g.name == LOCAL_UPLOAD_GROUP_NAME:
-                    search_group = g
-                    break
-
-        if not search_group:
-            search_group = ImageGroup(id=SEARCH_RESULTS_GROUP_ID, name=SEARCH_RESULTS_GROUP_NAME, image_ids=[])
-            library.groups.insert(0, search_group)
-        else:
-            search_group.name = SEARCH_RESULTS_GROUP_NAME
-
-        local_group = library.find_group_by_id(LOCAL_UPLOAD_GROUP_ID)
-        local_created = False
-        if not local_group:
-            local_group = ImageGroup(id=LOCAL_UPLOAD_GROUP_ID, name=LOCAL_UPLOAD_GROUP_NAME, image_ids=[])
-            local_created = True
-
-            insert_at = 0
-            for i, g in enumerate(library.groups):
-                if g is search_group:
-                    insert_at = i + 1
-                    break
-            library.groups.insert(insert_at, local_group)
-        else:
-            local_group.name = LOCAL_UPLOAD_GROUP_NAME
-
-        if local_created and search_group.image_ids:
-            local_group.image_ids.extend(search_group.image_ids)
-            search_group.image_ids.clear()
-
-    def set_library_group_image_order(self, group_id: str, image_ids: List[str]):
-        """仅接受当前分组图片 ID 的完整排列，避免请求丢失或注入引用。"""
-        with self._save_lock:
-            group = self._lib().find_group_by_id(group_id)
-            if not group:
-                raise InvalidInputError(
-                    "图片分组不存在或已被删除",
-                    code="library_group_not_found",
-                )
-            requested_ids = list(image_ids)
-            if (
-                len(requested_ids) != len(group.image_ids)
-                or len(set(requested_ids)) != len(requested_ids)
-                or set(requested_ids) != set(group.image_ids)
-            ):
-                raise InvalidInputError(
-                    "图片顺序必须包含该分组中的全部图片且不能重复",
-                    code="invalid_group_image_order",
-                )
-            group.image_ids = requested_ids
-            self.save_project()
-
     @staticmethod
     def _validate_reorder_indices(
         items: list,
@@ -383,14 +314,30 @@ class ProjectManager:
             )
 
     def search_only(self, query: str):
-        """只搜索不下载；预期搜索错误使用类型化异常向上传递。"""
-        from src.core.searchGamePng.get_game_image import GetGameJpg
+        """只搜索不下载，复用界面搜索的多来源服务。
+
+        仅在后台线程中调用（封面回填），因此可以在这里运行独立的事件循环。
+        没有结果且所有已配置来源都出错时抛出可重试错误，由调用方稍后重试。
+        """
+        import asyncio
+        from src.core.search import SearchService
+
         try:
-            searcher = GetGameJpg()
-            results = searcher.get_game_image(query)
-            if not results or not isinstance(results, list):
-                return []
-            return results
+            outcome = asyncio.run(SearchService().search_all(query))
+            results = outcome.get("results") or []
+            if results:
+                return results
+            statuses = [
+                source.get("status")
+                for source in outcome.get("sources", [])
+                if source.get("status") != "unconfigured"
+            ]
+            if statuses and all(status == "error" for status in statuses):
+                raise RemoteServiceError(
+                    "游戏封面搜索失败，请稍后重试",
+                    code="cover_search_failed",
+                )
+            return []
         except AppError:
             raise
         except Exception as exc:
@@ -399,107 +346,6 @@ class ProjectManager:
                 "游戏封面搜索失败，请稍后重试",
                 code="cover_search_failed",
             ) from exc
-
-    # === 隐藏预设图片库 ===
-
-    def _add_to_hidden_preset(self, image_id: str, group_id: str):
-        """将图片按分组存入当前模板的隐藏预设库"""
-        if not self.current_template:
-            return
-        preset = self.current_template.hidden_preset
-        group = preset.find_group_by_id(group_id)
-        if not group:
-            shared = self._lib().find_group_by_id(group_id)
-            group_name = shared.name if shared else ""
-            group = ImageGroup(id=group_id, name=group_name, image_ids=[])
-            preset.groups.append(group)
-        if image_id not in group.image_ids:
-            group.image_ids.append(image_id)
-
-    def get_hidden_presets_summary(self):
-        """返回所有模板的隐藏预设概况（模板名 + 图片总数）"""
-        with self._save_lock:
-            return [
-                {
-                    "template_id": template.id,
-                    "template_name": template.name,
-                    "total_images": sum(
-                        len(group.image_ids)
-                        for group in template.hidden_preset.groups
-                    ),
-                    "groups": [
-                        {
-                            "id": group.id,
-                            "name": group.name,
-                            "image_ids": list(group.image_ids),
-                        }
-                        for group in template.hidden_preset.groups
-                    ],
-                }
-                for template in self.project_data.templates
-            ]
-
-    def import_hidden_preset(self, source_template_id: str):
-        with self._save_lock:
-            target = self.get_template()
-            library_snapshot = copy.deepcopy(target.hidden_preset)
-            state_snapshot = dict(target.library_group_states)
-            try:
-                return self._import_hidden_preset_locked(source_template_id)
-            except Exception:
-                target.hidden_preset = library_snapshot
-                target.library_group_states = state_snapshot
-                raise
-
-    def _import_hidden_preset_locked(self, source_template_id: str):
-        """将指定模板的隐藏图片库导入当前模板（按分组追加，不覆盖）。"""
-        source = None
-        for t in self.project_data.templates:
-            if t.id == source_template_id:
-                source = t
-                break
-        if not source:
-            raise ValueError(f"模板 {source_template_id} 不存在")
-
-        count = 0
-        changed = False
-        occupied_image_ids = set(self.current_template.unassigned_images)
-        for tier in self.current_template.tiers:
-            occupied_image_ids.update(tier.image_ids)
-        for group in self.current_template.hidden_preset.groups:
-            occupied_image_ids.update(group.image_ids)
-        for src_group in source.hidden_preset.groups:
-            # 确保当前模板的隐藏图片库存在对应分组
-            target_group = self._lib().find_group_by_id(src_group.id)
-            if not target_group:
-                # 从源分组名还原分组名
-                group_name = src_group.name
-                if src_group.id == SEARCH_RESULTS_GROUP_ID:
-                    group_name = SEARCH_RESULTS_GROUP_NAME
-                elif src_group.id == LOCAL_UPLOAD_GROUP_ID:
-                    group_name = LOCAL_UPLOAD_GROUP_NAME
-                target_group = ImageGroup(id=src_group.id, name=group_name, image_ids=[])
-                self._lib().groups.append(target_group)
-                changed = True
-                if self.current_template:
-                    self.current_template.library_group_states[src_group.id] = True
-            for img_id in src_group.image_ids:
-                if img_id in self.project_data.shared_images_meta:
-                    if img_id not in occupied_image_ids:
-                        target_group.image_ids.append(img_id)
-                        occupied_image_ids.add(img_id)
-                        count += 1
-                        changed = True
-        if changed:
-            self.save_project()
-        return count
-
-    def _remove_from_all_hidden_presets(self, image_id: str):
-        """从所有模板的隐藏预设中移除指定图片"""
-        for t in self.project_data.templates:
-            for g in t.hidden_preset.groups:
-                if image_id in g.image_ids:
-                    g.image_ids.remove(image_id)
 
     def _source_cache_dir(self, source):
         """源图片缓存目录: data/steam, data/igdb, data/bangumi"""
@@ -747,6 +593,7 @@ class ProjectManager:
         add_to_unassigned: bool = False,
         group_id: str | None = None,
         steam_id: str = "",
+        game_name: str = "",
     ) -> TierImage:
         """将已验证的本地图片导入当前模板；失败时不留下半成品。"""
         target_group_id = group_id or SEARCH_RESULTS_GROUP_ID
@@ -762,8 +609,11 @@ class ProjectManager:
             target_group_name=target_group_name,
             original_name=os.path.basename(file_path),
             steam_id=steam_id,
-            source_group_id=group_id or "",
+            # 搜索下载的图片不属于任何平台账号，即使放入账号分组也不能
+            # 被“删除账号图片”连带删除。
+            source_group_id="",
             add_to_unassigned=add_to_unassigned,
+            game_name=game_name,
         )
 
     def _import_local_image_transaction(
@@ -776,6 +626,7 @@ class ProjectManager:
         steam_id: str = "",
         source_group_id: str = "",
         add_to_unassigned: bool = False,
+        game_name: str = "",
     ) -> TierImage:
         """复制文件、更新引用并原子保存；任一步失败都会回滚内存和新文件。"""
         with self._save_lock:
@@ -793,10 +644,11 @@ class ProjectManager:
                     original_name=original_name,
                     steam_id=steam_id,
                     source_group_id=source_group_id,
+                    game_name=(game_name or "").strip(),
                 )
                 self.project_data.shared_images_meta[image_id] = image
 
-                self._ensure_library_groups(template.hidden_preset)
+                # 下载/上传分组在第一次用到时才创建。
                 target_group = template.hidden_preset.find_group_by_id(target_group_id)
                 if target_group is None:
                     target_group = ImageGroup(
@@ -849,7 +701,6 @@ class ProjectManager:
         preset_data = data.get("global_preset_library", {})
         groups = [ImageGroup(**g) for g in preset_data.get("groups", [])]
         self.project_data.global_preset_library = ImageLibrary(groups=groups)
-        self._ensure_library_groups(self.project_data.global_preset_library)
         
         # 加载共享图片库和元数据（优先使用新字段，向后兼容旧字段）
         shared_lib_data = data.get("shared_image_library")
@@ -936,9 +787,8 @@ class ProjectManager:
             )
             self.project_data.templates.append(template)
 
-        # 旧项目可能没有隐藏图片库分组；只补齐基础分组，不再从全局图片库回填图片。
+        # 已有项目保留其现有分组；不再自动补建下载/上传分组。
         for template in self.project_data.templates:
-            self._ensure_library_groups(template.hidden_preset)
             for group in template.hidden_preset.groups:
                 template.library_group_states.setdefault(group.id, False)
                 if group.id.startswith("psn_import_") or group.id.startswith("xbox:"):
@@ -947,9 +797,6 @@ class ProjectManager:
                         if meta and not getattr(meta, "source_group_id", ""):
                             meta.source_group_id = group.id
 
-        # 确保共享图片库有必要的分组
-        self._ensure_library_groups(self.project_data.shared_image_library)
-        
         # 设置当前模板
         if self.project_data.current_template_id:
             self.switch_template(self.project_data.current_template_id)
@@ -994,12 +841,9 @@ class ProjectManager:
             TierRow(id=str(uuid.uuid4()), label="D", color="#7F7FFF"),
         ]
         
-        # 新模板只包含两个空的基础图片分组，不继承其他模板或全局母版的图片。
+        # 新模板没有任何图片分组；首次下载或上传图片时才创建对应分组。
         hidden_preset = ImageLibrary()
-        self._ensure_library_groups(hidden_preset)
-        library_group_states = {
-            group.id: False for group in hidden_preset.groups
-        }
+        library_group_states = {}
         
         new_template = Template(
             id=str(uuid.uuid4()),
@@ -1042,10 +886,6 @@ class ProjectManager:
                     return
             raise ValueError(f"Template {template_id} not found")
 
-    def rename_current_template(self, new_name: str):
-        if self.current_template:
-            self.rename_template(self.current_template.id, new_name)
-
     def rename_template(self, template_id: str, new_name: str) -> Template:
         """按 ID 重命名模板，不依赖可变化的当前模板状态。"""
         with self._save_lock:
@@ -1064,12 +904,6 @@ class ProjectManager:
                 template.name = previous_name
                 raise
             return template
-
-    def delete_current_template(self):
-        """删除当前模板，并切换到其他模板"""
-        if not self.current_template:
-            return
-        self.delete_template(self.current_template.id)
 
     def delete_template(self, template_id: str) -> Template:
         """按 ID 删除模板；仅在删除当前模板时选择新的当前模板。"""
@@ -1096,58 +930,31 @@ class ProjectManager:
                 raise
             return replacement
 
-    def move_library_group(self, from_index: int, to_index: int):
-        """移动分组顺序"""
-        with self._save_lock:
-            groups = self._lib().groups
-            self._validate_reorder_indices(
-                groups,
-                from_index,
-                to_index,
-                code="invalid_group_order",
-            )
-            item = groups.pop(from_index)
-            groups.insert(to_index, item)
-            self.save_project()
-
     def delete_library_group(self, group_id: str):
-        """删除图片库分组，其中的图片移动到第一个分组"""
+        """删除图片库分组；其中的图片移到第一个其他分组，没有其他分组时移到未排序区。"""
         groups = self._lib().groups
-        if len(groups) <= 1:
-            # 只有一个分组时不让删，或者删了也没地方移
-            return
 
         # 找到要删除的分组
         target_group = None
-        target_index = -1
-        for i, g in enumerate(groups):
+        for g in groups:
             if g.id == group_id:
                 target_group = g
-                target_index = i
                 break
-        
+
         if not target_group:
             return
 
-        # 确定目标分组 (通常是第0个，如果删的是第0个，则移到第1个)
-        dest_group_index = 0
-        if target_index == 0:
-            dest_group_index = 1
-        
-        dest_group = groups[dest_group_index]
-        
-        # 移动图片
-        dest_group.image_ids.extend(target_group.image_ids)
-        
+        dest_group = next((g for g in groups if g is not target_group), None)
+        if dest_group is not None:
+            dest_group.image_ids.extend(target_group.image_ids)
+        elif self.current_template:
+            # 这是唯一的分组：图片保留在模板里，放入未排序区。
+            self.current_template.unassigned_images.extend(target_group.image_ids)
+
         # 删除分组
         groups.remove(target_group)
-        self.save_project()
-
-    def set_library_group_expanded(self, group_id: str, expanded: bool):
-        if not self.current_template:
-            return
-        
-        self.current_template.library_group_states[group_id] = expanded
+        if self.current_template:
+            self.current_template.library_group_states.pop(group_id, None)
         self.save_project()
 
     def add_tier_row(self, label: str = "NEW", color: str = "#808080"):
@@ -1228,51 +1035,6 @@ class ProjectManager:
             target_group_name=LOCAL_UPLOAD_GROUP_NAME,
             original_name=original_name or os.path.basename(file_path),
         )
-
-    def upload_folder(self, folder_path: str):
-        """批量上传文件夹内的所有图片"""
-        if not self.current_template or not os.path.isdir(folder_path):
-            return
-
-        valid_exts = {'.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp'}
-        count = 0
-        
-        # 1. 遍历文件夹
-        for root, _, files in os.walk(folder_path):
-            for file in files:
-                ext = os.path.splitext(file)[1].lower()
-                if ext in valid_exts:
-                    full_path = os.path.join(root, file)
-                    # 复用单张上传逻辑，但为了性能可以先不 save_project
-                    # 这里为了代码简单直接调用，稍后统一 save
-                    self._upload_image_no_save(full_path)
-                    count += 1
-        
-        if count > 0:
-            self.save_project()
-        return count
-
-    def _upload_image_no_save(self, file_path: str):
-        """内部使用的不自动保存的上传方法"""
-        try:
-            rel_path, image_id = self.image_svc.import_image(file_path)
-            filename = os.path.basename(file_path)
-            img_obj = TierImage(id=image_id, path=rel_path, original_name=filename)
-            self.project_data.shared_images_meta[image_id] = img_obj
-            self._ensure_library_groups(self._lib())
-            target_group = self._lib().find_group_by_id(LOCAL_UPLOAD_GROUP_ID)
-            if not target_group:
-                target_group = ImageGroup(id=LOCAL_UPLOAD_GROUP_ID, name=LOCAL_UPLOAD_GROUP_NAME, image_ids=[])
-                search_group = self._lib().find_group_by_id(SEARCH_RESULTS_GROUP_ID)
-                if search_group:
-                    insert_at = self._lib().groups.index(search_group) + 1
-                    self._lib().groups.insert(insert_at, target_group)
-                else:
-                    self._lib().groups.append(target_group)
-            target_group.image_ids.append(image_id)
-            self._add_to_hidden_preset(image_id, LOCAL_UPLOAD_GROUP_ID)
-        except Exception:
-            pass
 
     def delete_image_from_template(self, image_id: str):
         """仅从当前模板中移除图片引用"""
@@ -1442,50 +1204,8 @@ class ProjectManager:
             if image_id in group.image_ids:
                 group.image_ids.remove(image_id)
 
-    def _add_image_ref(self, zone_type: str, zone_id: str, image_id: str, index: int):
-        t = self.current_template
-        target_list = None
-
-        if zone_type == 'tier':
-            for tier in t.tiers:
-                if tier.id == zone_id:
-                    target_list = tier.image_ids
-                    break
-        elif zone_type == 'unassigned':
-            target_list = t.unassigned_images
-        elif zone_type == 'library_group':
-            group = self._lib().find_group_by_id(zone_id)
-            if group:
-                target_list = group.image_ids
-
-        if target_list is not None:
-            # Prevent duplicates: remove if already present before re-inserting
-            if image_id in target_list:
-                target_list.remove(image_id)
-            if index == -1 or index >= len(target_list):
-                target_list.append(image_id)
-            else:
-                target_list.insert(index, image_id)
-
-    # --- 全局预设 ---
-    
-    def save_current_library_as_preset(self):
-        """保存当前模板的图片库状态为全局预设（母版）"""
-        if not self.current_template:
-            return
-
-        self.project_data.shared_image_library = copy.deepcopy(self._lib())
-        self.save_project()
-
-    def get_tier_rows(self) -> List[TierRow]:
-        return self.current_template.tiers if self.current_template else []
-
-    def get_library_groups(self) -> List[ImageGroup]:
-        return self._lib().groups
-
     def create_library_group(self, name: str):
         """创建新的图片库分组"""
-        import uuid
         new_group = ImageGroup(id=str(uuid.uuid4()), name=name, image_ids=[])
         self._lib().groups.append(new_group)
         # Initialize expanded state for current template
@@ -1573,37 +1293,6 @@ class ProjectManager:
             )
         }
 
-    def delete_images_by_source_group_id(
-        self,
-        group_id: str,
-        *,
-        legacy_steam_id: str = "",
-    ) -> int:
-        """按稳定来源身份全局删除图片，并兼容旧 Steam 元数据。"""
-        return self.delete_account_images(
-            group_id,
-            legacy_steam_id=legacy_steam_id,
-        )
-
-    def remove_groups_by_id_globally(self, group_id: str) -> int:
-        """从全部模板及兼容图片库中删除账号分组。"""
-        with self._save_lock:
-            removed = 0
-            libraries = [
-                self.project_data.shared_image_library,
-                self.project_data.global_preset_library,
-                *(template.hidden_preset for template in self.project_data.templates),
-            ]
-            for library in libraries:
-                before = len(library.groups)
-                library.groups = [g for g in library.groups if g.id != group_id]
-                removed += before - len(library.groups)
-            for template in self.project_data.templates:
-                template.library_group_states.pop(group_id, None)
-            if removed:
-                self.save_project()
-            return removed
-
     def delete_account_images(
         self,
         group_id: str,
@@ -1646,13 +1335,6 @@ class ProjectManager:
         for image_id in image_ids:
             self._delete_image_files_best_effort(image_id)
         return len(image_ids)
-
-    def delete_images_by_steam_id(self, steam_id: str) -> int:
-        """兼容旧调用：按 Steam 来源组和旧 steam_id 元数据删除。"""
-        return self.delete_images_by_source_group_id(
-            "steam_import_" + str(steam_id),
-            legacy_steam_id=str(steam_id),
-        )
 
     def register_remote_images(
         self,
@@ -1814,32 +1496,6 @@ class ProjectManager:
         if changed:
             self.save_project()
         return count
-
-    # def backfill_remote_images(self, steam_id="", limit=0):
-    #     """后台下载远程图片到本地。直连失败(404)时用游戏名搜索兜底。
-    #     limit>0 时每次最多处理 limit 张。返回 (ok, fail)。"""
-    #     import logging
-    #     _log = logging.getLogger(__name__)
-    #     ok = fail = 0
-    #     remote_items = [
-    #         (img_id, meta)
-    #         for img_id, meta in self.project_data.shared_images_meta.items()
-    #         if meta.is_remote and not meta.remote_failed
-    #         and (not steam_id or meta.steam_id == steam_id)
-    #     ]
-    #     batch = remote_items[:limit] if limit > 0 else remote_items
-    #     for img_id, meta in batch:
-    #         local_path = self.image_svc.download_remote_to_local(img_id, meta.path)
-    #         if local_path and local_path != "__404__":
-    #             meta.is_remote = False
-    #             meta.path = local_path
-    #         self.project_data.shared_images_meta[image_id] = img_obj
-    #         group.image_ids.append(image_id)
-    #         count += 1
-    #
-    #     if count:
-    #         self.save_project()
-    #     return count
 
     def backfill_remote_images(self, steam_id="", limit=0, source="", *, on_progress=None):
         """后台下载远程图片到本地。先将原图存入 source cache，再复制到 images/。

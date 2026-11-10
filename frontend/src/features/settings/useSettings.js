@@ -22,7 +22,6 @@
     const settingsLoadSequenceRef = useRef(0);
     const [openSourceLicenses, setOpenSourceLicenses] = useState([]);
     const [settingsOperation, setSettingsOperation] = useState(null);
-    const [psnNpsso, setPsnNpsso] = useState('');
     const [configuredSecrets, setConfiguredSecrets] = useState({});
     const [secretTouched, setSecretTouched] = useState({});
     const [psnOnlineId, setPsnOnlineId] = useState('');
@@ -49,7 +48,6 @@
         setBangumiToken('');
         setSteamKey('');
         setSteamgriddbApiKey('');
-        setPsnNpsso('');
         const configured = cfg.configured_secrets || {};
         setConfiguredSecrets(configured);
         setSettingsBaseline({
@@ -217,49 +215,6 @@
         /* use defaults */
       }
     };
-    const handleSavePsnSettings = async () => {
-      try {
-        await fetchAPI('/settings/psn', {
-          method: 'PUT',
-          body: JSON.stringify({
-            psn_npsso: secretTouched.psn_npsso ? psnNpsso.trim() : null,
-          }),
-        });
-        return {
-          ok: true,
-          section: 'psn',
-          message: t('settings.npssoSaved'),
-        };
-      } catch (e) {
-        return {
-          ok: false,
-          section: 'psn',
-          message: getErrorMessage(e, 'errors.saveFailed'),
-        };
-      }
-    };
-    const handleSavePsnSettingsFromPlatform = async () => {
-      setSettingsOperation({
-        key: 'psn-npsso-save',
-        labelKey: 'settings.savingPsnNpsso',
-      });
-      try {
-        const result = await handleSavePsnSettings();
-        showToast(result.message, result.ok ? 'success' : 'error');
-        if (result.ok) {
-          setConfiguredSecrets((previous) => ({
-            ...previous,
-            psn_npsso: !!psnNpsso.trim(),
-          }));
-          setSecretTouched((previous) => ({
-            ...previous,
-            psn_npsso: false,
-          }));
-        }
-      } finally {
-        setSettingsOperation(null);
-      }
-    };
     const handleSaveAllSettings = async () => {
       if (!settingsLoadedRef.current || !settingsBaseline) {
         showToast(t('settings.loadFailed'), 'error');
@@ -301,19 +256,9 @@
                 bangumi_token: !!bangumiToken.trim(),
               }
             : {}),
-          ...(successful.has('steam') && secretTouched.steam_key
-            ? {
-                steam_key: !!steamKey.trim(),
-              }
-            : {}),
           ...(successful.has('steamgriddb') && secretTouched.steamgriddb_api_key
             ? {
                 steamgriddb_api_key: !!steamgriddbApiKey.trim(),
-              }
-            : {}),
-          ...(successful.has('psn') && secretTouched.psn_npsso
-            ? {
-                psn_npsso: !!psnNpsso.trim(),
               }
             : {}),
         }));
@@ -341,16 +286,6 @@
                 steamgriddb_api_key: false,
               }
             : {}),
-          ...(successful.has('steam')
-            ? {
-                steam_key: false,
-              }
-            : {}),
-          ...(successful.has('psn')
-            ? {
-                psn_npsso: false,
-              }
-            : {}),
         }));
       }
     };
@@ -376,8 +311,6 @@
       openSourceLicenses,
       settingsOperation,
       setSettingsOperation,
-      psnNpsso,
-      setPsnNpsso,
       configuredSecrets,
       secretTouched,
       psnOnlineId,
@@ -392,7 +325,6 @@
       updateSettingSecret,
       handleSaveSteamKeyFromPlatform,
       loadPsnFilters,
-      handleSavePsnSettingsFromPlatform,
       handleSaveAllSettings,
       togglePsnCategory,
     };
